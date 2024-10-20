@@ -82,7 +82,7 @@ function createSession(sessionId) {
                         });
     
                         try {
-                            const actionElement = await driver.findElement(By.css('td[data-label="Aksi"] a.see-more'));
+                            const actionElement = await driver.findElement(By.css('td[data-label="Aksi"]'));
                             await actionElement.executeScript("arguments[0].click();", submitButton);
     
                             const windows = await driver.getAllWindowHandles();
@@ -105,7 +105,7 @@ function createSession(sessionId) {
                             await driver.switchTo().window(windows[0]);
     
                         } catch (error) {
-                            client.sendMessage(message.from, "data tidak ditemukan");
+                            client.sendMessage(message.from, error);
                         }
                   
                     } finally {
