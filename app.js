@@ -10,7 +10,7 @@ let isChecking = false;
 
 function isNumericString(str) {
     return /^\d+$/.test(str);
-  }
+}
 
 function createSession(sessionId) {
     console.log(`Creating session: ${sessionId}`);
@@ -72,7 +72,7 @@ function createSession(sessionId) {
                         await driver.sleep(1000);
                     
                         const submitButton = await driver.findElement(By.id('be-search-resi'));
-                        await submitButton.click();
+                        await driver.executeScript("arguments[0].click();", submitButton);
                         await driver.sleep(1000);
                   
                         driver.wait(function() {
@@ -80,11 +80,30 @@ function createSession(sessionId) {
                                 return readyState === 'complete';
                             });
                         });
-
+    
                         try {
-                            const statusElement = await driver.findElement(By.css('td[data-label="Status"]'));
-                            const statusText = await statusElement.getText();
-                            client.sendMessage(message.from, "status resi: " + statusText);
+                            const actionElement = await driver.findElement(By.css('td[data-label="Aksi"] a.see-more'));
+                            await actionElement.executeScript("arguments[0].click();", submitButton);
+    
+                            const windows = await driver.getAllWindowHandles();
+    
+                            await driver.switchTo().window(windows[1]);
+    
+                            driver.wait(function() {
+                                return driver.executeScript('return document.readyState').then(function(readyState) {
+                                    return readyState === 'complete';
+                                });
+                            });
+    
+                            const listItems = await driver.findElements(By.css('ul li'));
+                            const lastListItem = listItems[listItems.length - 1]; 
+                            const lastItemText = await lastListItem.getText();
+    
+                            client.sendMessage(message.from, "status : " + lastItemText);
+    
+                            await driver.close();
+                            await driver.switchTo().window(windows[0]);
+    
                         } catch (error) {
                             client.sendMessage(message.from, "data tidak ditemukan");
                         }
