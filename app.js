@@ -8,11 +8,12 @@ const path = require('path');
 let clients = {};
 let isChecking = false;
 
-function isNumericString(str) {
-    return /^\d+$/.test(str);
-}
+const isNumericString = (str) => {
+    const parts = str.split("\n");
+    return parts.every(part => /^\d+$/.test(part));
+};
 
-function createSession(sessionId) {
+const createSession = (sessionId) => {
     console.log(`Creating session: ${sessionId}`);
 
     const client = new Client({
@@ -42,77 +43,110 @@ function createSession(sessionId) {
         console.log(`Client for session ${sessionId} disconnected: ${reason}`);
     });
 
-    client.on('message_create', async message => {
+    client.on('message_create', async (message) => {
         if (!message.fromMe) {
             if (isNumericString(message.body) && !isChecking) {
                 isChecking = true;
                 client.sendMessage(message.from, "data sedang diproses");
-                (async function example() {
+
+                const cekResi = async () => {
                     let options = new chrome.Options();
                     options.addArguments('--headless'); 
-                  
+
                     let driver = await new Builder().forBrowser(Browser.CHROME).setChromeOptions(options).build();
                   
                     try {
-                        await driver.get('https://www.jne.co.id/');
-                        driver.wait(function() {
-                            return driver.executeScript('return document.readyState').then(function(readyState) {
+                        await driver.get('https://www.jne.co.id/tracking-package');
+                        driver.wait(() => {
+                            return driver.executeScript('return document.readyState').then((readyState) => {
                                 return readyState === 'complete';
                             });
                         });
-                  
-                        const initialUrl = await driver.getCurrentUrl();
-                        client.sendMessage(message.from, "sedang membuka situs cek resi di " + initialUrl);
-                        
+
                         const inputField = await driver.findElement(By.className('tagify__input'));
-                        await inputField.sendKeys(message.body);
-                        await driver.sleep(1000);
-                    
-                        await inputField.sendKeys(Key.TAB);  
-                        await driver.sleep(1000);
-                    
-                        const submitButton = await driver.findElement(By.id('be-search-resi'));
-                        await driver.executeScript("arguments[0].click();", submitButton);
-                        await driver.sleep(1000);
-                  
-                        driver.wait(function() {
-                            return driver.executeScript('return document.readyState').then(function(readyState) {
-                                return readyState === 'complete';
-                            });
-                        });
-    
-                        try {
-                            const actionElement = await driver.findElement(By.css('td[data-label="Aksi"]'));
-                            await actionElement.executeScript("arguments[0].click();", submitButton);
-    
-                            const windows = await driver.getAllWindowHandles();
-    
-                            await driver.switchTo().window(windows[1]);
-    
-                            driver.wait(function() {
-                                return driver.executeScript('return document.readyState').then(function(readyState) {
-                                    return readyState === 'complete';
-                                });
-                            });
-    
-                            const listItems = await driver.findElements(By.css('ul li'));
-                            const lastListItem = listItems[listItems.length - 1]; 
-                            const lastItemText = await lastListItem.getText();
-    
-                            client.sendMessage(message.from, "status : " + lastItemText);
-    
-                            await driver.close();
-                            await driver.switchTo().window(windows[0]);
-    
-                        } catch (error) {
-                            client.sendMessage(message.from, error);
+                        const messageArray = message.body.split("\n");
+
+                        if (messageArray.length > 0) {
+                            for (const message of messageArray) {
+                                await inputField.sendKeys(message);
+                                await inputField.sendKeys(Key.TAB);  
+                            }
+
+                            await driver.sleep(1000);
+
+                            const submitButton = await driver.findElement(By.id('lacak-pengiriman'));
+                            await driver.executeScript("arguments[0].click();", submitButton);
+
+                            await driver.sleep(1000);
+
+                            const tableElement = await driver.findElement(By.css('.wrap-table table tbody'));
+                            const rows = await tableElement.findElements(By.css('tr'));
+
+                            let results = [];
+
+                            for (const row of rows) {
+                                const columns = await row.findElements(By.css('td'));
+
+                                if (columns.length > 8) {
+                                    const noResi = await columns[1].getText();
+                                    const status = await columns[7].getText();
+
+                                    if (status === "ON PROCESS") {
+                                        const linkRedirect = await columns[8].findElement(By.css('a'));
+                                        await driver.executeScript("arguments[0].click();", linkRedirect);
+
+                                        await driver.sleep(1000);
+
+                                        driver.wait(() => {
+                                            return driver.executeScript('return document.readyState').then((readyState) => {
+                                                return readyState === 'complete';
+                                            });
+                                        });
+
+                                        const windowHandles = await driver.getAllWindowHandles();
+                                        if (windowHandles.length > 0) {
+                                            await driver.switchTo().window(windowHandles[1]);
+                                            await driver.sleep(1000); 
+
+                                            const timeline = await driver.findElement(By.css('ul.timeline.widget'));
+                                            const timelineItems = await timeline.findElements(By.css('li'));
+
+                                            let lastValidItem = "";
+                                            for (let i = timelineItems.length - 1; i >= 0; i--) {
+                                                const text = await timelineItems[i].getText();
+                                                if (text.trim() !== "") {
+                                                    lastValidItem = text;
+                                                    break;
+                                                }
+                                            }
+
+                                            await driver.close();
+                                            await driver.switchTo().window(windowHandles[0]);
+
+                                            results.push(`Resi: ${noResi}, Status: ${lastValidItem}`);
+                                        } else {
+                                            results.push(`Resi: ${noResi}, Status: ${status}`);
+                                        }
+                                    } else {
+                                        results.push(`Resi: ${noResi}, Status: ${status}`);
+                                    }
+                                } else {
+                                    const noResi = await columns[1].getText();
+                                    results.push(`Resi: ${noResi}, Status: Data tidak ditemukan`);
+                                }
+                            }
+
+                            client.sendMessage(message.from, results.length > 0 ? results.join("\n") : "invalid");
                         }
-                  
+                    } catch (error) {
+                        client.sendMessage(message.from, "error gateway");
                     } finally {
                         isChecking = false;
                         await driver.quit();
                     }
-                })();
+                };
+
+                cekResi();
             } else if (isChecking) {
                 client.sendMessage(message.from, "sistem sedang memproses resi lain");
             } else {
@@ -125,17 +159,17 @@ function createSession(sessionId) {
     clients[sessionId] = client;
 
     return client;
-}
+};
 
-function destroySession(sessionId) {
+const destroySession = (sessionId) => {
     const sessionPath = path.join(__dirname, `.wwebjs_auth/session-${sessionId}`);
 
     if (clients[sessionId]) {
         console.log(`Destroying client for session ${sessionId}`);
-        
+
         clients[sessionId].destroy().then(() => {
             console.log(`Client for session ${sessionId} destroyed.`);
-            
+
             if (fs.existsSync(sessionPath)) {
                 fs.rmSync(sessionPath, { recursive: true, force: true });
                 console.log(`Session ${sessionId} has been destroyed from disk.`);
@@ -150,7 +184,7 @@ function destroySession(sessionId) {
     } else {
         console.log(`Client for session ${sessionId} does not exist.`);
     }
-}
+};
 
 const session1 = createSession('session1');
 
