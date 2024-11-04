@@ -30,7 +30,7 @@ async function fetchUnconnectedClients() {
 async function resetClientData() {
     const connection = await initDB();
     await connection.execute(
-        'UPDATE chatbot_whatsapps SET qrcode = NULL, whatsapp_number = NULL, is_connect = 0 WHERE deleted_at IS NULL'
+        'UPDATE chatbot_whatsapps SET qrcode = NULL, whatsapp_number_linked = NULL, is_connect = 0 WHERE deleted_at IS NULL'
     );
     connection.end();
 }
@@ -38,33 +38,28 @@ async function resetClientData() {
 async function updateQRCode(clientId, qrCode) {
     const connection = await initDB();
     await connection.execute(
-        'UPDATE chatbot_whatsapps SET qrcode = ?, whatsapp_number = NULL, is_connect = 0 WHERE id = ? AND deleted_at IS NULL',
+        'UPDATE chatbot_whatsapps SET qrcode = ?, whatsapp_number_linked = NULL, is_connect = 0 WHERE id = ? AND deleted_at IS NULL',
         [qrCode, clientId]
+    );
+    connection.end();
+}
+
+async function updateNoMatchNumber(clientId) {
+    const connection = await initDB();
+    await connection.execute(
+        'UPDATE chatbot_whatsapps SET whatsapp_number_linked = NULL, is_connect = 0 WHERE id = ? AND deleted_at IS NULL',
+        [clientId]
     );
     connection.end();
 }
 
 async function updateClientConnected(clientId, whatsappNumber) {
     const connection = await initDB();
-    try {
-        await connection.execute(
-            'UPDATE chatbot_whatsapps SET qrcode = NULL, is_connect = 1, whatsapp_number = ? WHERE id = ? AND deleted_at IS NULL',
-            [whatsappNumber, clientId]
-        );
-    } catch (error) {
-        console.error(`Failed to update client connected for ID ${clientId}:`, error.message);
-
-        if (error.code === 'ER_DUP_ENTRY') {
-            console.log(`Duplicate whatsappNumber found for client ID ${clientId}. Disconnecting session.`);
-            
-            if (clients[clientId]) {
-                clients[clientId].destroy();
-                delete clients[clientId];
-            }
-        }
-    } finally {
-        connection.end();
-    }
+    await connection.execute(
+        'UPDATE chatbot_whatsapps SET qrcode = NULL, is_connect = 1, whatsapp_number_linked = ? WHERE id = ? AND deleted_at IS NULL',
+        [whatsappNumber, clientId]
+    );
+    connection.end();
 }
 
 function createClient(session) {
@@ -117,7 +112,7 @@ function createClient(session) {
                 } catch (error) {
                     console.error("Error during cekResi process:", error);
                 } 
-                
+
             } else if (client.isChecking) {
                 client.sendMessage(message.from, "sistem sedang memproses resi lain");
             } else {
@@ -137,6 +132,13 @@ async function initializeUnconnectedClients() {
     for (const session of sessions) {
         if (!clients[session.id]) {
             clients[session.id] = createClient(session);
+        } else {
+            if (session.is_connect && session.whatsapp_number !== session.whatsapp_number_linked) {
+                console.log(`Deleting session for client ID ${session.id} as it no match with whatsapp_number.`);
+                updateNoMatchNumber(session.id);
+                clients[session.id].destroy(); 
+                delete clients[session.id];
+            }
         }
     }
 
