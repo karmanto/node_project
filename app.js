@@ -3,7 +3,6 @@ const { cekResi } = require('./cek-resi-jne');
 const mysql = require('mysql2/promise');
 
 let clients = {};
-let isChecking = false;
 
 const isNumericString = (str) => {
     const parts = str.split("\n");
@@ -73,6 +72,8 @@ function createClient(session) {
         authStrategy: new NoAuth()
     });
 
+    client.isChecking = false;
+
     client.on('qr', (qr) => {
         updateQRCode(session.id, qr);
     });
@@ -101,17 +102,23 @@ function createClient(session) {
 
     client.on('message_create', async message => {
         if (!message.fromMe) {
-            if (isNumericString(message.body) && !isChecking) {
-                isChecking = true;
-                client.sendMessage(message.from, "data sedang diproses");
-                const response = await cekResi(message);
-                if (response.status === "success") {
-                    client.sendMessage(message.from, response.data);
-                } else {
-                    client.sendMessage(message.from, response.message);
-                }
-                isChecking = false;
-            } else if (isChecking) {
+            if (isNumericString(message.body) && !client.isChecking) {
+                client.isChecking = true;
+                try {
+                    await client.sendMessage(message.from, "data sedang diproses");
+                    const response = await cekResi(message);
+                    if (response.status === "success") {
+                        await client.sendMessage(message.from, response.data);
+                    } else {
+                        await client.sendMessage(message.from, response.message);
+                    }
+
+                    client.isChecking = false;
+                } catch (error) {
+                    console.error("Error during cekResi process:", error);
+                } 
+                
+            } else if (client.isChecking) {
                 client.sendMessage(message.from, "sistem sedang memproses resi lain");
             } else {
                 client.sendMessage(message.from, "resi tidak valid");
