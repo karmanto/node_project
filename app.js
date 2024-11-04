@@ -1,10 +1,8 @@
 const { Client, NoAuth } = require('whatsapp-web.js');
-const { Builder, Browser, By, Key, until } = require('selenium-webdriver');
-const chrome = require('selenium-webdriver/chrome');
-const qrcode = require('qrcode-terminal');
-const fs = require('fs');
-const path = require('path');
+const { cekResi } = require('./cek-resi-jne');
+const mysql = require('mysql2/promise');
 
+let clients = {};
 let isChecking = false;
 
 const isNumericString = (str) => {
@@ -12,140 +10,140 @@ const isNumericString = (str) => {
     return parts.every(part => /^\d+$/.test(part));
 };
 
-const client = new Client({
-    authStrategy: new NoAuth()
-});
+async function initDB() {
+    return await mysql.createConnection({
+        host: 'localhost',
+        user: 'root',
+        password: 'root',
+        database: 'crm'
+    });
+}
 
-client.on('qr', (qr) => {
-    qrcode.generate(qr, { small: true });
-});
+async function fetchUnconnectedClients() {
+    const connection = await initDB();
+    const [rows] = await connection.execute(
+        'SELECT * FROM chatbot_whatsapps WHERE deleted_at IS NULL'
+    );
+    connection.end();
+    return rows;
+}
 
-client.on('ready', () => {
-    console.log(`Client is ready!`);
-});
+async function resetClientData() {
+    const connection = await initDB();
+    await connection.execute(
+        'UPDATE chatbot_whatsapps SET qrcode = NULL, whatsapp_number = NULL, is_connect = 0 WHERE deleted_at IS NULL'
+    );
+    connection.end();
+}
 
-client.on('authenticated', () => {
-    console.log(`Client authenticated successfully.`);
-});
+async function updateQRCode(clientId, qrCode) {
+    const connection = await initDB();
+    await connection.execute(
+        'UPDATE chatbot_whatsapps SET qrcode = ?, whatsapp_number = NULL, is_connect = 0 WHERE id = ? AND deleted_at IS NULL',
+        [qrCode, clientId]
+    );
+    connection.end();
+}
 
-client.on('auth_failure', () => {
-    console.error(`Authentication failed.`);
-});
+async function updateClientConnected(clientId, whatsappNumber) {
+    const connection = await initDB();
+    try {
+        await connection.execute(
+            'UPDATE chatbot_whatsapps SET qrcode = NULL, is_connect = 1, whatsapp_number = ? WHERE id = ? AND deleted_at IS NULL',
+            [whatsappNumber, clientId]
+        );
+    } catch (error) {
+        console.error(`Failed to update client connected for ID ${clientId}:`, error.message);
 
-client.on('disconnected', (reason) => {
-    console.log(`Client disconnected: ${reason}`);
-});
+        if (error.code === 'ER_DUP_ENTRY') {
+            console.log(`Duplicate whatsappNumber found for client ID ${clientId}. Disconnecting session.`);
+            
+            if (clients[clientId]) {
+                clients[clientId].destroy();
+                delete clients[clientId];
+            }
+        }
+    } finally {
+        connection.end();
+    }
+}
 
-client.on('message_create', async (message) => {
-    if (!message.fromMe) {
-        if (isNumericString(message.body) && !isChecking) {
-            isChecking = true;
-            client.sendMessage(message.from, "data sedang diproses");
+function createClient(session) {
+    const client = new Client({
+        authStrategy: new NoAuth()
+    });
 
-            const cekResi = async () => {
-                let options = new chrome.Options();
-                options.addArguments('--headless'); 
+    client.on('qr', (qr) => {
+        updateQRCode(session.id, qr);
+    });
 
-                let driver = await new Builder().forBrowser(Browser.CHROME).setChromeOptions(options).build();
-                
-                try {
-                    await driver.get('https://www.jne.co.id/tracking-package');
-                    driver.wait(() => {
-                        return driver.executeScript('return document.readyState').then((readyState) => {
-                            return readyState === 'complete';
-                        });
-                    });
+    client.on('ready', async () => {
+        console.log(`Client ID ${session.id} is ready!`);
+        const phoneNumber = client?.info?.wid?.user;
+        if (phoneNumber) {
+            await updateClientConnected(session.id, phoneNumber);
+        }
+    });
 
-                    const inputField = await driver.findElement(By.className('tagify__input'));
-                    const messageArray = message.body.split("\n");
+    client.on('authenticated', () => {
+        console.log(`Client ID ${session.id} authenticated successfully.`);
+    });
 
-                    if (messageArray.length > 0) {
-                        for (const message of messageArray) {
-                            await inputField.sendKeys(message);
-                            await inputField.sendKeys(Key.TAB);  
-                        }
+    client.on('auth_failure', () => {
+        console.error(`Authentication failed for client ID ${session.id}.`);
+    });
 
-                        await driver.sleep(1000);
+    client.on('disconnected', (reason) => {
+        console.log(`Client ID ${session.id} disconnected: ${reason}`);
+        clients[session.id].destroy(); 
+        delete clients[session.id];
+    });
 
-                        const submitButton = await driver.findElement(By.id('lacak-pengiriman'));
-                        await driver.executeScript("arguments[0].click();", submitButton);
-
-                        await driver.sleep(1000);
-
-                        const tableElement = await driver.findElement(By.css('.wrap-table table tbody'));
-                        const rows = await tableElement.findElements(By.css('tr'));
-
-                        let results = [];
-
-                        for (const row of rows) {
-                            const columns = await row.findElements(By.css('td'));
-
-                            if (columns.length > 8) {
-                                const noResi = await columns[1].getText();
-                                const status = await columns[7].getText();
-
-                                if (status === "ON PROCESS") {
-                                    const linkRedirect = await columns[8].findElement(By.css('a'));
-                                    await driver.executeScript("arguments[0].click();", linkRedirect);
-
-                                    await driver.sleep(1000);
-
-                                    driver.wait(() => {
-                                        return driver.executeScript('return document.readyState').then((readyState) => {
-                                            return readyState === 'complete';
-                                        });
-                                    });
-
-                                    const windowHandles = await driver.getAllWindowHandles();
-                                    if (windowHandles.length > 0) {
-                                        await driver.switchTo().window(windowHandles[1]);
-                                        await driver.sleep(1000); 
-
-                                        const timeline = await driver.findElement(By.css('ul.timeline.widget'));
-                                        const timelineItems = await timeline.findElements(By.css('li'));
-
-                                        let lastValidItem = "";
-                                        for (let i = timelineItems.length - 1; i >= 0; i--) {
-                                            const text = await timelineItems[i].getText();
-                                            if (text.trim() !== "") {
-                                                lastValidItem = text;
-                                                break;
-                                            }
-                                        }
-
-                                        await driver.close();
-                                        await driver.switchTo().window(windowHandles[0]);
-
-                                        results.push(`Resi: ${noResi}, Status: ${lastValidItem}`);
-                                    } else {
-                                        results.push(`Resi: ${noResi}, Status: ${status}`);
-                                    }
-                                } else {
-                                    results.push(`Resi: ${noResi}, Status: ${status}`);
-                                }
-                            } else {
-                                const noResi = await columns[1].getText();
-                                results.push(`Resi: ${noResi}, Status: Data tidak ditemukan`);
-                            }
-                        }
-
-                        client.sendMessage(message.from, results.length > 0 ? results.join("\n") : "invalid");
-                    }
-                } catch (error) {
-                    client.sendMessage(message.from, "error gateway");
-                } finally {
-                    isChecking = false;
-                    await driver.quit();
+    client.on('message_create', async message => {
+        if (!message.fromMe) {
+            if (isNumericString(message.body) && !isChecking) {
+                isChecking = true;
+                client.sendMessage(message.from, "data sedang diproses");
+                const response = await cekResi(message);
+                if (response.status === "success") {
+                    client.sendMessage(message.from, response.data);
+                } else {
+                    client.sendMessage(message.from, response.message);
                 }
-            };
+                isChecking = false;
+            } else if (isChecking) {
+                client.sendMessage(message.from, "sistem sedang memproses resi lain");
+            } else {
+                client.sendMessage(message.from, "resi tidak valid");
+            }
+        }
+    });
 
-            cekResi();
-        } else if (isChecking) {
-            client.sendMessage(message.from, "sistem sedang memproses resi lain");
-        } else {
-            client.sendMessage(message.from, "resi tidak valid");
+    client.initialize();
+    return client;
+}
+
+async function initializeUnconnectedClients() {
+    const sessions = await fetchUnconnectedClients();
+    const activeClientIds = sessions.map(session => session.id);
+
+    for (const session of sessions) {
+        if (!clients[session.id]) {
+            clients[session.id] = createClient(session);
         }
     }
-});
 
-client.initialize();
+    for (const clientId in clients) {
+        if (!activeClientIds.includes(Number(clientId))) {
+            console.log(`Deleting session for client ID ${clientId} as it has been deleted.`);
+            clients[clientId].destroy(); 
+            delete clients[clientId];
+        }
+    }
+}
+
+resetClientData().then(() => {
+    setInterval(initializeUnconnectedClients, 2000);
+}).catch(err => {
+    console.error('Failed to reset client data:', err);
+});
