@@ -47,7 +47,7 @@ async function updateQRCode(clientId, qrCode) {
 async function updateNoMatchNumber(clientId) {
     const connection = await initDB();
     await connection.execute(
-        'UPDATE chatbot_whatsapps SET whatsapp_number_linked = NULL, is_connect = 0 WHERE id = ? AND deleted_at IS NULL',
+        'UPDATE chatbot_whatsapps SET qrcode = NULL, whatsapp_number_linked = NULL, is_connect = 0 WHERE id = ? AND deleted_at IS NULL',
         [clientId]
     );
     connection.end();
@@ -97,27 +97,28 @@ function createClient(session) {
 
     client.on('message_create', async message => {
         if (!message.fromMe) {
-            if (isNumericString(message.body) && !client.isChecking) {
-                client.isChecking = true;
-                try {
-                    await client.sendMessage(message.from, "data sedang diproses");
-                    const response = await cekResi(message);
-                    if (response.status === "success") {
-                        await client.sendMessage(message.from, response.data);
-                    } else {
-                        await client.sendMessage(message.from, response.message);
-                    }
+            // if (isNumericString(message.body) && !client.isChecking) {
+            //     client.isChecking = true;
+            //     try {
+            //         await client.sendMessage(message.from, "data sedang diproses");
+            //         const response = await cekResi(message);
+            //         if (response.status === "success") {
+            //             await client.sendMessage(message.from, response.data);
+            //         } else {
+            //             await client.sendMessage(message.from, response.message);
+            //         }
 
-                    client.isChecking = false;
-                } catch (error) {
-                    console.error("Error during cekResi process:", error);
-                } 
+            //         client.isChecking = false;
+            //     } catch (error) {
+            //         console.error("Error during cekResi process:", error);
+            //     } 
 
-            } else if (client.isChecking) {
-                client.sendMessage(message.from, "sistem sedang memproses resi lain");
-            } else {
-                client.sendMessage(message.from, "resi tidak valid");
-            }
+            // } else if (client.isChecking) {
+            //     client.sendMessage(message.from, "sistem sedang memproses resi lain");
+            // } else {
+            //     client.sendMessage(message.from, "resi tidak valid");
+            // }
+            client.sendMessage(message.from, message.body);
         }
     });
 
@@ -131,10 +132,17 @@ async function initializeUnconnectedClients() {
 
     for (const session of sessions) {
         if (!clients[session.id]) {
-            clients[session.id] = createClient(session);
+            if (session.is_active) {
+                clients[session.id] = createClient(session);
+            }
         } else {
             if (session.is_connect && session.whatsapp_number !== session.whatsapp_number_linked) {
                 console.log(`Deleting session for client ID ${session.id} as it no match with whatsapp_number.`);
+                updateNoMatchNumber(session.id);
+                clients[session.id].destroy(); 
+                delete clients[session.id];
+            } else if (!session.is_active) {
+                console.log(`Deleting session for client ID ${session.id} as it has been nonactive.`);
                 updateNoMatchNumber(session.id);
                 clients[session.id].destroy(); 
                 delete clients[session.id];
