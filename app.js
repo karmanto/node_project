@@ -97,27 +97,27 @@ function createClient(session) {
 
     client.on('message_create', async message => {
         if (!message.fromMe) {
-            // if (isNumericString(message.body) && !client.isChecking) {
-            //     client.isChecking = true;
-            //     try {
-            //         await client.sendMessage(message.from, "data sedang diproses");
-            //         const response = await cekResi(message);
-            //         if (response.status === "success") {
-            //             await client.sendMessage(message.from, response.data);
-            //         } else {
-            //             await client.sendMessage(message.from, response.message);
-            //         }
+            if (isNumericString(message.body) && !client.isChecking) {
+                client.isChecking = true;
+                try {
+                    await client.sendMessage(message.from, "data sedang diproses");
+                    const response = await cekResi(message);
+                    if (response.status === "success") {
+                        await client.sendMessage(message.from, response.data);
+                    } else {
+                        await client.sendMessage(message.from, response.message);
+                    }
 
-            //         client.isChecking = false;
-            //     } catch (error) {
-            //         console.error("Error during cekResi process:", error);
-            //     } 
+                    client.isChecking = false;
+                } catch (error) {
+                    console.error("Error during cekResi process:", error);
+                } 
 
-            // } else if (client.isChecking) {
-            //     client.sendMessage(message.from, "sistem sedang memproses resi lain");
-            // } else {
-            //     client.sendMessage(message.from, "resi tidak valid");
-            // }
+            } else if (client.isChecking) {
+                client.sendMessage(message.from, "sistem sedang memproses resi lain");
+            } else {
+                client.sendMessage(message.from, "resi tidak valid");
+            }
             client.sendMessage(message.from, message.body);
         }
     });
