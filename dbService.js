@@ -66,6 +66,17 @@ async function fetchCustomerAddersByUserId(userId) {
     return rows;
 }
 
+async function isUserActive(userId) {
+    const connection = await initDB();
+    const [rows] = await connection.execute(
+        'SELECT is_active FROM users WHERE id = ? AND deleted_at IS NULL',
+        [userId]
+    );
+    connection.end();
+    
+    return rows.length > 0 && rows[0].is_active === 1;
+}
+
 module.exports = {
     fetchUnconnectedClients,
     resetClientData,
@@ -73,5 +84,6 @@ module.exports = {
     updateNoMatchNumber,
     updateClientConnected,
     fetchCustomersByUserId,
-    fetchCustomerAddersByUserId
+    fetchCustomerAddersByUserId,
+    isUserActive
 };
