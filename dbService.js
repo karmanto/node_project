@@ -66,6 +66,15 @@ async function fetchCustomerAddersByUserId(userId) {
     return rows;
 }
 
+async function createCustomer(userId, chatbotWhatsappId, whatsappNumber, name) {
+    const connection = await initDB();
+    await connection.execute(
+        'INSERT INTO customers (user_id, chatbot_whatsapp_id, whatsapp_number, name, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
+        [userId, chatbotWhatsappId, whatsappNumber, name]
+    );
+    connection.end();
+}
+
 async function isUserActive(userId) {
     const connection = await initDB();
     const [rows] = await connection.execute(
@@ -77,6 +86,55 @@ async function isUserActive(userId) {
     return rows.length > 0 && rows[0].is_active === 1;
 }
 
+async function fetchCustomerByPhoneNumber(userId, phoneNumber) {
+    const connection = await initDB();
+    const [rows] = await connection.execute(
+        'SELECT * FROM customers WHERE user_id = ? AND whatsapp_number = ? AND deleted_at IS NULL',
+        [userId, phoneNumber]
+    );
+    connection.end();
+    return rows.length > 0 ? rows[0] : null;
+}
+
+async function fetchAwbAddersByUserId(userId) {
+    const connection = await initDB();
+    const [rows] = await connection.execute(
+        'SELECT * FROM awb_adders WHERE user_id = ? AND deleted_at IS NULL',
+        [userId]
+    );
+    connection.end();
+    return rows;
+}
+
+async function fetchLogisticByName(logisticName) {
+    const connection = await initDB();
+    const [rows] = await connection.execute(
+        'SELECT id FROM logistics WHERE name = ? AND deleted_at IS NULL',
+        [logisticName]
+    );
+    connection.end();
+    return rows.length > 0 ? rows[0].id : null;
+}
+
+async function createAwb(customerId, logisticId, awbNumber) {
+    const connection = await initDB();
+    await connection.execute(
+        'INSERT INTO awbs (customer_id, logistic_id, awb_number, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
+        [customerId, logisticId, awbNumber]
+    );
+    connection.end();
+}
+
+async function checkAwbExists(customerId, logisticId, awbNumber) {
+    const connection = await initDB();
+    const [rows] = await connection.execute(
+        'SELECT id FROM awbs WHERE customer_id = ? AND logistic_id = ? AND awb_number = ? AND deleted_at IS NULL',
+        [customerId, logisticId, awbNumber]
+    );
+    connection.end();
+    return rows.length > 0;
+}
+
 module.exports = {
     fetchUnconnectedClients,
     resetClientData,
@@ -85,5 +143,11 @@ module.exports = {
     updateClientConnected,
     fetchCustomersByUserId,
     fetchCustomerAddersByUserId,
-    isUserActive
+    createCustomer,
+    isUserActive,
+    fetchCustomerByPhoneNumber,
+    fetchAwbAddersByUserId,
+    fetchLogisticByName,
+    createAwb,
+    checkAwbExists
 };

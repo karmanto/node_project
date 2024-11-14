@@ -8,6 +8,7 @@ const {
     isUserActive
 } = require('./dbService');
 const { addCustomerIfNotExists } = require('./cek-customer');
+const { checkAndCreateAwb } = require('./cek-awb');
 
 let clients = {};
 
@@ -45,6 +46,7 @@ function createClient(session) {
     client.on('message_create', async message => {
         if (await isUserActive(session.user_id)) {
             await addCustomerIfNotExists(session, message);
+            await checkAndCreateAwb(session, message);
         }
     });
 
