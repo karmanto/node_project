@@ -9,6 +9,7 @@ const {
 } = require('./dbService');
 const { addCustomerIfNotExists } = require('./cek-customer');
 const { checkAndCreateAwb } = require('./cek-awb');
+const { checkChatbotSchedule } = require('./cek-chatbot-schedule');
 
 let clients = {};
 
@@ -47,6 +48,7 @@ function createClient(session) {
         if (await isUserActive(session.user_id)) {
             await addCustomerIfNotExists(session, message);
             await checkAndCreateAwb(session, message);
+            await checkChatbotSchedule(session, message);
         }
     });
 

@@ -135,6 +135,25 @@ async function checkAwbExists(customerId, logisticId, awbNumber) {
     return rows.length > 0;
 }
 
+async function fetchChatbotSchedulesByUserId(userId) {
+    const connection = await initDB();
+    const [rows] = await connection.execute(
+        'SELECT * FROM chatbot_schedules WHERE user_id = ? AND deleted_at IS NULL',
+        [userId]
+    );
+    connection.end();
+    return rows;
+}
+
+async function updateCustomer(userId, phoneNumber, chatbotScheduleId, scheduleSendAfter) {
+    const connection = await initDB();
+    await connection.execute(
+        'UPDATE customers SET chatbot_schedule_id = ?, schedule_send_after = ? WHERE user_id = ? AND whatsapp_number = ?',
+        [chatbotScheduleId, scheduleSendAfter, userId, phoneNumber]
+    );
+    connection.end();
+}
+
 module.exports = {
     fetchUnconnectedClients,
     resetClientData,
@@ -149,5 +168,7 @@ module.exports = {
     fetchAwbAddersByUserId,
     fetchLogisticByName,
     createAwb,
-    checkAwbExists
+    checkAwbExists,
+    fetchChatbotSchedulesByUserId,
+    updateCustomer
 };
