@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, NoAuth, MessageMedia } = require('whatsapp-web.js');
+const { Client, NoAuth } = require('whatsapp-web.js');
 const {
     fetchUnconnectedClients,
     resetClientData,
@@ -8,15 +8,13 @@ const {
     updateClientConnected,
     isUserActive,
     fetchCustomerByPhoneNumber,
-    fetchCustomersWithSchedule,
-    fetchChatbotScheduleById,
-    fetchChatbotDocuments,
-    markCustomerRemoveScheduled
 } = require('./dbService');
 const { addCustomerIfNotExists } = require('./cek-customer');
 const { checkAndCreateAwb } = require('./cek-awb');
 const { checkChatbotSchedule } = require('./cek-chatbot-schedule');
 const { cekResiJne } = require('./cek-resi');
+const { sendScheduledMessages } = require('./send-schedule-messages');
+const { sendAwbNotifierMessages } = require('./send-awbnotifier-messages');
 
 let clients = {};
 
@@ -45,32 +43,8 @@ function createClient(session) {
         }
 
         setInterval(async () => {
-            const customers = await fetchCustomersWithSchedule(session.user_id);
-            
-            for (const customer of customers) {
-                const chatbotSchedule = await fetchChatbotScheduleById(customer.chatbot_schedule_id);
-                if (chatbotSchedule) {
-                    const documents = await fetchChatbotDocuments(chatbotSchedule.id);
-                    const message = chatbotSchedule.message;
-
-                    await client.sendMessage(`${customer.whatsapp_number}@c.us`, message);
-
-                    for (const doc of documents) { 
-                        try {
-                            const media = MessageMedia.fromFilePath(process.env.LARAVEL_STORAGE_PATH + doc.filepath);
-                            await client.sendMessage(`${customer.whatsapp_number}@c.us`, media);
-                        } catch (error) {
-                            console.log("error send media ", error.message);
-                        }
-                    }
-
-                    try {
-                        await markCustomerRemoveScheduled(customer.id);
-                    } catch (error) {
-                        console.log("error remove schedule from customer ", error.message);
-                    }
-                }
-            }
+            await sendScheduledMessages(client, session);
+            await sendAwbNotifierMessages(client, session);
         }, process.env.SCHEDULE_INTERVAL);
     });
 

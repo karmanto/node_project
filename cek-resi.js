@@ -57,8 +57,6 @@ const cekResiJne = async () => {
                 if (columns.length > 8) {
                     const status = await columns[7].getText();
 
-                    console.log("status", status);
-
                     if (status === "ON PROCESS") {
                         const linkRedirect = await columns[8].findElement(By.css('a'));
                         await driver.executeScript("arguments[0].click();", linkRedirect);

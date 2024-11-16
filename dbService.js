@@ -2,6 +2,9 @@ require('dotenv').config();
 const mysql = require('mysql2/promise');
 const { initDB } = require('./config');
 
+const durationInDays = process.env.AWB_DURATION_DAYS || 0;
+
+//fetch
 async function fetchUnconnectedClients() {
     const connection = await initDB();
     const [rows] = await connection.execute(
@@ -89,9 +92,11 @@ async function fetchAwbsByLogistic(logisticName) {
             SELECT awbs.* 
             FROM awbs 
             INNER JOIN logistics ON awbs.logistic_id = logistics.id 
-            WHERE logistics.name = ? AND awbs.deleted_at IS NULL
+            WHERE logistics.name = ? 
+              AND awbs.deleted_at IS NULL
+              AND awbs.created_at < DATE_ADD(NOW(), INTERVAL ? DAY)
         `,
-        [logisticName]
+        [logisticName, durationInDays]
     );
     connection.end();
     return rows;
@@ -101,26 +106,25 @@ async function fetchCustomersWithSchedule(userId) {
     const now = new Date();
     const connection = await initDB();
     const [rows] = await connection.execute(
-        `SELECT * 
-         FROM customers 
-         WHERE user_id = ? 
-           AND chatbot_schedule_id IS NOT NULL 
-           AND schedule_send_after < ?
-           AND deleted_at IS NULL`,
+        `
+        SELECT 
+            customers.*,
+            chatbot_schedules.*
+        FROM 
+            customers
+        INNER JOIN 
+            chatbot_schedules 
+            ON customers.chatbot_schedule_id = chatbot_schedules.id
+        WHERE 
+            customers.user_id = ?
+            AND customers.schedule_send_after < ?
+            AND customers.deleted_at IS NULL
+            AND chatbot_schedules.deleted_at IS NULL
+        `,
         [userId, now]
     );
     connection.end();
     return rows;
-}
-
-async function fetchChatbotScheduleById(id) {
-    const connection = await initDB();
-    const [rows] = await connection.execute(
-        'SELECT * FROM chatbot_schedules WHERE id = ? AND deleted_at IS NULL',
-        [id]
-    );
-    connection.end();
-    return rows.length > 0 ? rows[0] : null;
 }
 
 async function fetchChatbotDocuments(scheduleId) {
@@ -133,7 +137,44 @@ async function fetchChatbotDocuments(scheduleId) {
     return rows;
 }
 
-//////////
+async function fetchNotifierDocuments(notifierId) {
+    const connection = await initDB();
+    const [rows] = await connection.execute(
+        'SELECT * FROM documents WHERE awb_notifier_id = ? AND deleted_at IS NULL',
+        [notifierId]
+    );
+    connection.end();
+    return rows;
+}
+
+async function fetchAwbsByUserId(userId) {
+    const connection = await initDB();
+    const [rows] = await connection.execute(
+        `
+        SELECT 
+            awbs.*,
+            customers.*
+        FROM awbs
+        INNER JOIN customers ON awbs.customer_id = customers.id
+        WHERE customers.user_id = ? AND awbs.deleted_at IS NULL AND customers.deleted_at IS NULL
+        `,
+        [userId]
+    );
+    connection.end();
+    return rows;
+}
+
+async function fetchAwbNotifiersByUserId(userId) {
+    const connection = await initDB();
+    const [rows] = await connection.execute(
+        'SELECT * FROM awb_notifiers WHERE user_id = ? AND deleted_at IS NULL',
+        [userId]
+    );
+    connection.end();
+    return rows;
+}
+
+//update
 async function resetClientData() {
     const connection = await initDB();
     await connection.execute(
@@ -206,7 +247,16 @@ async function markCustomerRemoveScheduled(id) {
     connection.end();
 }
 
-//////////
+async function markNotifierFromAwb(awbId, notifierId) {
+    const connection = await initDB();
+    await connection.execute(
+        'UPDATE awbs SET awb_notifier_status_id = ? WHERE id = ? AND deleted_at IS NULL',
+        [notifierId, awbId]
+    );
+    connection.end();
+}
+
+//create
 async function createCustomer(userId, chatbotWhatsappId, whatsappNumber, name) {
     const connection = await initDB();
     await connection.execute(
@@ -245,7 +295,10 @@ module.exports = {
     fetchAwbsByLogistic,
     updateAwbStatus,
     fetchCustomersWithSchedule,
-    fetchChatbotScheduleById,
     fetchChatbotDocuments,
-    markCustomerRemoveScheduled
+    markCustomerRemoveScheduled,
+    fetchAwbsByUserId,
+    fetchAwbNotifiersByUserId,
+    fetchNotifierDocuments,
+    markNotifierFromAwb
 };
