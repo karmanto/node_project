@@ -89,7 +89,7 @@ async function isUserActive(userId) {
 async function fetchCustomerByPhoneNumber(userId, phoneNumber) {
     const connection = await initDB();
     const [rows] = await connection.execute(
-        'SELECT * FROM customers WHERE user_id = ? AND whatsapp_number = ? AND deleted_at IS NULL',
+        'SELECT * FROM customers WHERE user_id = ? AND whatsapp_number = ? AND is_exception = 0 AND deleted_at IS NULL',
         [userId, phoneNumber]
     );
     connection.end();
@@ -148,8 +148,27 @@ async function fetchChatbotSchedulesByUserId(userId) {
 async function updateCustomer(userId, phoneNumber, chatbotScheduleId, scheduleSendAfter) {
     const connection = await initDB();
     await connection.execute(
-        'UPDATE customers SET chatbot_schedule_id = ?, schedule_send_after = ? WHERE user_id = ? AND whatsapp_number = ?',
+        'UPDATE customers SET chatbot_schedule_id = ?, schedule_send_after = ? WHERE user_id = ? AND whatsapp_number = ? AND deleted_at IS NULL',
         [chatbotScheduleId, scheduleSendAfter, userId, phoneNumber]
+    );
+    connection.end();
+}
+
+async function fetchAwbsByLogistic(logisticId) {
+    const connection = await initDB();
+    const [rows] = await connection.execute(
+        'SELECT id, awb_number FROM awbs WHERE logistic_id = ? AND deleted_at IS NULL',
+        [logisticId]
+    );
+    connection.end();
+    return rows;
+}
+
+async function updateAwbStatus(noResi, status) {
+    const connection = await initDB();
+    await connection.execute(
+        'UPDATE awbs SET awb_status = ?, updated_at = NOW() WHERE awb_number = ?',
+        [status, noResi]
     );
     connection.end();
 }
@@ -170,5 +189,7 @@ module.exports = {
     createAwb,
     checkAwbExists,
     fetchChatbotSchedulesByUserId,
-    updateCustomer
+    updateCustomer,
+    fetchAwbsByLogistic,
+    updateAwbStatus,
 };

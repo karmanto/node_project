@@ -5,11 +5,13 @@ const {
     updateQRCode,
     updateNoMatchNumber,
     updateClientConnected,
-    isUserActive
+    isUserActive,
+    fetchCustomerByPhoneNumber
 } = require('./dbService');
 const { addCustomerIfNotExists } = require('./cek-customer');
 const { checkAndCreateAwb } = require('./cek-awb');
 const { checkChatbotSchedule } = require('./cek-chatbot-schedule');
+const { cekResiJne } = require('./cek-resi');
 
 let clients = {};
 
@@ -46,9 +48,16 @@ function createClient(session) {
 
     client.on('message_create', async message => {
         if (await isUserActive(session.user_id)) {
-            await addCustomerIfNotExists(session, message);
-            await checkAndCreateAwb(session, message);
-            await checkChatbotSchedule(session, message);
+            const isFromMe = message.fromMe;
+            const phoneNumber = isFromMe ? message.to.split('@')[0] : message.from.split('@')[0];
+            const customer = await fetchCustomerByPhoneNumber(session.user_id, phoneNumber);
+
+            if (customer) {
+                await checkAndCreateAwb(session, message, customer);
+                await checkChatbotSchedule(session, message);
+            } else {
+                await addCustomerIfNotExists(session, message);
+            }
         }
     });
 
@@ -91,6 +100,8 @@ async function initializeUnconnectedClients() {
 
 resetClientData().then(() => {
     setInterval(initializeUnconnectedClients, 2000);
+    setInterval(cekResiJne, 3600000);
+    cekResiJne();
 }).catch(err => {
     console.error('Failed to reset client data:', err);
 });
