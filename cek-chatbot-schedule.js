@@ -10,8 +10,11 @@ async function checkChatbotSchedule(session, message) {
         if ((chatbotSchedule.trigger_from === 0 && isFromMe) || (chatbotSchedule.trigger_from === 1 && !isFromMe)) {
             if (message.body.includes(chatbotSchedule.trigger_message)) {
                 const sendAfter = new Date(Date.now() + chatbotSchedule.send_after * 1000);
-                await updateCustomer(session.user_id, phoneNumber, chatbotSchedule.id, sendAfter);
-                console.log(`Schedule telah diperbaharui untuk customer dengan nomor whatsapp ${phoneNumber}`);
+                try {
+                    await updateCustomer(session.user_id, phoneNumber, chatbotSchedule.id, sendAfter);
+                } catch (error) {
+                    console.log("error update customer schedule ", error.message);
+                }
             }
         }
     }

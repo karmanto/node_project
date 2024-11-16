@@ -10,8 +10,12 @@ async function addCustomerIfNotExists(session, message) {
 
             if ((adder.trigger_from === 0 && isFromMe) || (adder.trigger_from === 1 && !isFromMe)) {
                 if (message.body.includes(adder.trigger_message)) {
-                    await createCustomer(session.user_id, session.id, phoneNumber, "user " + phoneNumber);
-                    console.log(`New customer added with user ID ${session.user_id} and phone number ${phoneNumber}`);
+                    try {
+                        await createCustomer(session.user_id, session.id, phoneNumber, "user " + phoneNumber);
+                    } catch (error) {
+                        console.log("error create customer ", error.message);
+                    }
+
                     break;
                 }
             }

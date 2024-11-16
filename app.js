@@ -26,14 +26,22 @@ function createClient(session) {
     });
 
     client.on('qr', (qr) => {
-        updateQRCode(session.id, qr);
+        try {
+            updateQRCode(session.id, qr);
+        } catch (error) {
+            console.log("error update QR ", error.message);
+        }
     });
 
     client.on('ready', async () => {
         console.log(`Client ID ${session.id} is ready!`);
         const phoneNumber = client?.info?.wid?.user;
         if (phoneNumber) {
-            await updateClientConnected(session.id, phoneNumber);
+            try {
+                await updateClientConnected(session.id, phoneNumber);
+            } catch (error) {
+                console.log("error update client connection ", error.message);
+            }
         }
 
         setInterval(async () => {
@@ -52,14 +60,18 @@ function createClient(session) {
                             const media = MessageMedia.fromFilePath(process.env.LARAVEL_STORAGE_PATH + doc.filepath);
                             await client.sendMessage(`${customer.whatsapp_number}@c.us`, media);
                         } catch (error) {
-                            console.log("error send media with error ", error);
+                            console.log("error send media ", error.message);
                         }
                     }
 
-                    await markCustomerRemoveScheduled(customer.id);
+                    try {
+                        await markCustomerRemoveScheduled(customer.id);
+                    } catch (error) {
+                        console.log("error remove schedule from customer ", error.message);
+                    }
                 }
             }
-        }, 10000);
+        }, process.env.SCHEDULE_INTERVAL);
     });
 
     client.on('authenticated', () => {
@@ -107,12 +119,22 @@ async function initializeUnconnectedClients() {
         } else {
             if (session.is_connect && session.whatsapp_number !== session.whatsapp_number_linked) {
                 console.log(`Deleting session for client ID ${session.id} as it no match with whatsapp_number.`);
-                updateNoMatchNumber(session.id);
+                try {
+                    await updateNoMatchNumber(session.id);
+                } catch (error) {
+                    console.log("error no match number ", error.message);
+                }
+
                 clients[session.id].destroy(); 
                 delete clients[session.id];
             } else if (!session.is_active) {
                 console.log(`Deleting session for client ID ${session.id} as it has been nonactive.`);
-                updateNoMatchNumber(session.id);
+                try {
+                    await updateNoMatchNumber(session.id);
+                } catch (error) {
+                    console.log("error no match number ", error.message);
+                }
+
                 clients[session.id].destroy(); 
                 delete clients[session.id];
             }
@@ -129,8 +151,8 @@ async function initializeUnconnectedClients() {
 }
 
 resetClientData().then(() => {
-    setInterval(initializeUnconnectedClients, 2000);
-    setInterval(cekResiJne, 1 * 60 * 60 * 1000);
+    setInterval(initializeUnconnectedClients, process.env.CEK_CLIENT_INTERAVAL);
+    setInterval(cekResiJne, process.env.CEK_RESI_INTERVAL);
     cekResiJne();
 }).catch(err => {
     console.error('Failed to reset client data:', err);

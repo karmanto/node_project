@@ -19,22 +19,22 @@ async function checkAndCreateAwb(session, message, customer) {
                 const logisticMatch = message.body.match(logisticPattern);
 
                 if (awbMatch && logisticMatch) {
-                    const awbNumber = awbMatch[1];
-                    const logisticName = logisticMatch[1];
+                    const awbNumber = awbMatch[1] ?? "";
+                    const logisticName = logisticMatch[1] ?? "";
                     const logisticId = await fetchLogisticByName(logisticName);
                     
-                    if (logisticId) {
+                    if (logisticId && awbNumber && logisticName) {
                         const awbExists = await checkAwbExists(customer.id, logisticId, awbNumber);
                         if (!awbExists) {
-                            await createAwb(customer.id, logisticId, awbNumber);
-                            console.log(`AWB baru dibuat untuk customer ID ${customer.id} dengan nomor AWB ${awbNumber} dan logistic ${logisticName}`);
-                        } else {
-                            console.log('AWB sudah ada, tidak perlu membuat baru.');
+                            try {
+                                await createAwb(customer.id, logisticId, awbNumber);
+                            } catch (error) {
+                                console.log("error create new awb ", error.message);
+                            }
                         }
+
                         break; 
-                    } else {
-                        console.log('Logistic tidak ditemukan');
-                    }
+                    } 
                 }
             }
         }
