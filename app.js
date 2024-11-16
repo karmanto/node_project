@@ -1,4 +1,5 @@
-const { Client, NoAuth } = require('whatsapp-web.js');
+require('dotenv').config();
+const { Client, NoAuth, MessageMedia } = require('whatsapp-web.js');
 const {
     fetchUnconnectedClients,
     resetClientData,
@@ -6,7 +7,11 @@ const {
     updateNoMatchNumber,
     updateClientConnected,
     isUserActive,
-    fetchCustomerByPhoneNumber
+    fetchCustomerByPhoneNumber,
+    fetchCustomersWithSchedule,
+    fetchChatbotScheduleById,
+    fetchChatbotDocuments,
+    markCustomerRemoveScheduled
 } = require('./dbService');
 const { addCustomerIfNotExists } = require('./cek-customer');
 const { checkAndCreateAwb } = require('./cek-awb');
@@ -30,6 +35,31 @@ function createClient(session) {
         if (phoneNumber) {
             await updateClientConnected(session.id, phoneNumber);
         }
+
+        setInterval(async () => {
+            const customers = await fetchCustomersWithSchedule(session.user_id);
+            
+            for (const customer of customers) {
+                const chatbotSchedule = await fetchChatbotScheduleById(customer.chatbot_schedule_id);
+                if (chatbotSchedule) {
+                    const documents = await fetchChatbotDocuments(chatbotSchedule.id);
+                    const message = chatbotSchedule.message;
+
+                    await client.sendMessage(`${customer.whatsapp_number}@c.us`, message);
+
+                    for (const doc of documents) { 
+                        try {
+                            const media = MessageMedia.fromFilePath(process.env.LARAVEL_STORAGE_PATH + doc.filepath);
+                            await client.sendMessage(`${customer.whatsapp_number}@c.us`, media);
+                        } catch (error) {
+                            console.log("error send media with error ", error);
+                        }
+                    }
+
+                    await markCustomerRemoveScheduled(customer.id);
+                }
+            }
+        }, 10000);
     });
 
     client.on('authenticated', () => {
@@ -100,7 +130,7 @@ async function initializeUnconnectedClients() {
 
 resetClientData().then(() => {
     setInterval(initializeUnconnectedClients, 2000);
-    setInterval(cekResiJne, 3600000);
+    setInterval(cekResiJne, 1 * 60 * 60 * 1000);
     cekResiJne();
 }).catch(err => {
     console.error('Failed to reset client data:', err);

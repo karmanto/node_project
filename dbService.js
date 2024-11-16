@@ -154,21 +154,71 @@ async function updateCustomer(userId, phoneNumber, chatbotScheduleId, scheduleSe
     connection.end();
 }
 
-async function fetchAwbsByLogistic(logisticId) {
+async function fetchAwbsByLogistic(logisticName) {
     const connection = await initDB();
     const [rows] = await connection.execute(
-        'SELECT id, awb_number FROM awbs WHERE logistic_id = ? AND deleted_at IS NULL',
-        [logisticId]
+        `
+            SELECT awbs.* 
+            FROM awbs 
+            INNER JOIN logistics ON awbs.logistic_id = logistics.id 
+            WHERE logistics.name = ? AND awbs.deleted_at IS NULL
+        `,
+        [logisticName]
     );
     connection.end();
     return rows;
 }
 
-async function updateAwbStatus(noResi, status) {
+async function updateAwbStatus(noResi, status, date) {
     const connection = await initDB();
     await connection.execute(
-        'UPDATE awbs SET awb_status = ?, updated_at = NOW() WHERE awb_number = ?',
-        [status, noResi]
+        'UPDATE awbs SET last_awb_status = ?, last_awb_status_date = ?, updated_at = NOW() WHERE awb_number = ? AND deleted_at IS NULL',
+        [status, date, noResi]
+    );
+    connection.end();
+}
+
+async function fetchCustomersWithSchedule(userId) {
+    const now = new Date();
+    const connection = await initDB();
+    const [rows] = await connection.execute(
+        `SELECT * 
+         FROM customers 
+         WHERE user_id = ? 
+           AND chatbot_schedule_id IS NOT NULL 
+           AND schedule_send_after < ?
+           AND deleted_at IS NULL`,
+        [userId, now]
+    );
+    connection.end();
+    return rows;
+}
+
+async function fetchChatbotScheduleById(id) {
+    const connection = await initDB();
+    const [rows] = await connection.execute(
+        'SELECT * FROM chatbot_schedules WHERE id = ? AND deleted_at IS NULL',
+        [id]
+    );
+    connection.end();
+    return rows.length > 0 ? rows[0] : null;
+}
+
+async function fetchChatbotDocuments(scheduleId) {
+    const connection = await initDB();
+    const [rows] = await connection.execute(
+        'SELECT * FROM documents WHERE chatbot_schedule_id = ? AND deleted_at IS NULL',
+        [scheduleId]
+    );
+    connection.end();
+    return rows;
+}
+
+async function markCustomerRemoveScheduled(id) {
+    const connection = await initDB();
+    await connection.execute(
+        'UPDATE customers SET chatbot_schedule_id = NULL, schedule_send_after = NULL WHERE id = ? AND deleted_at IS NULL',
+        [id]
     );
     connection.end();
 }
@@ -192,4 +242,8 @@ module.exports = {
     updateCustomer,
     fetchAwbsByLogistic,
     updateAwbStatus,
+    fetchCustomersWithSchedule,
+    fetchChatbotScheduleById,
+    fetchChatbotDocuments,
+    markCustomerRemoveScheduled
 };
