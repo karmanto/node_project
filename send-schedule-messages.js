@@ -10,8 +10,6 @@ async function sendScheduledMessages(client, session) {
 
     for (const customer of customers) {
         const message = customer.message;
-        await client.sendMessage(`${customer.whatsapp_number}@c.us`, message);
-
         const documents = await fetchChatbotDocuments(customer.chatbot_schedule_id);
 
         for (const doc of documents) {
@@ -23,8 +21,10 @@ async function sendScheduledMessages(client, session) {
             }
         }
 
+        await client.sendMessage(`${customer.whatsapp_number}@c.us`, message);
+
         try {
-            await markCustomerRemoveScheduled(customer.id);
+            await markCustomerRemoveScheduled(customer);
         } catch (error) {
             console.error(`Error removing schedule for customer ${customer.id}:`, error.message);
         }

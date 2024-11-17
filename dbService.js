@@ -108,8 +108,11 @@ async function fetchCustomersWithSchedule(userId) {
     const [rows] = await connection.execute(
         `
         SELECT 
-            customers.*,
-            chatbot_schedules.*
+            customers.id AS id,
+            customers.chatbot_schedule_id,
+            customers.whatsapp_number,
+            chatbot_schedules.id AS schedule_id,
+            chatbot_schedules.message AS message
         FROM 
             customers
         INNER JOIN 
@@ -153,7 +156,7 @@ async function fetchAwbsByUserId(userId) {
         `
         SELECT 
             awbs.*,
-            customers.*
+            customers.whatsapp_number
         FROM awbs
         INNER JOIN customers ON awbs.customer_id = customers.id
         WHERE customers.user_id = ? AND awbs.deleted_at IS NULL AND customers.deleted_at IS NULL
@@ -238,11 +241,11 @@ async function updateAwbStatus(noResi, status, date) {
     connection.end();
 }
 
-async function markCustomerRemoveScheduled(id) {
+async function markCustomerRemoveScheduled(customer) {
     const connection = await initDB();
     await connection.execute(
-        'UPDATE customers SET chatbot_schedule_id = NULL, schedule_send_after = NULL WHERE id = ? AND deleted_at IS NULL',
-        [id]
+        'UPDATE customers SET chatbot_schedule_id = NULL, schedule_send_after = NULL WHERE id = ? AND deleted_at IS NULL AND chatbot_schedule_id = ?',
+        [customer.id, customer.chatbot_schedule_id]
     );
     connection.end();
 }

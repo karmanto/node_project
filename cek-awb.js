@@ -13,8 +13,8 @@ async function checkAndCreateAwb(session, message, customer) {
 
         if ((adder.trigger_from === 0 && isFromMe) || (adder.trigger_from === 1 && !isFromMe)) {
             if (message.body.includes(adder.trigger_message)) {
-                const awbPattern = new RegExp(`${adder.awb_field}\\s*(\\S+)`);
-                const logisticPattern = new RegExp(`${adder.logistic_field}\\s*(\\S+)`);
+                const awbPattern = new RegExp(`${adder.awb_field}\\s*:\\s*(\\S*)\\s*(?:\\n|$)`);
+                const logisticPattern = new RegExp(`${adder.logistic_field}\\s*:\\s*(\\S*)\\s*(?:\\n|$)`);
                 const awbMatch = message.body.match(awbPattern);
                 const logisticMatch = message.body.match(logisticPattern);
 

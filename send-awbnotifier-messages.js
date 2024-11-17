@@ -16,7 +16,6 @@ async function sendAwbNotifierMessages(client, session) {
                 awb.last_awb_status.includes(awb_notifier.trigger_awb_status) &&
                 awb.awb_notifier_status_id != awb_notifier.id
                 ) {
-                    await client.sendMessage(`${awb.whatsapp_number}@c.us`, awb_notifier.message);
                     const documents = await fetchNotifierDocuments(awb_notifier.id);
 
                     for (const doc of documents) {
@@ -27,6 +26,8 @@ async function sendAwbNotifierMessages(client, session) {
                             console.error(`Error sending media to ${awb.whatsapp_number}:`, error.message);
                         }
                     }
+                    
+                    await client.sendMessage(`${awb.whatsapp_number}@c.us`, awb_notifier.message);
 
                     try {
                         await markNotifierFromAwb(awb.id, awb_notifier.id);
