@@ -43,8 +43,8 @@ function createClient(session) {
         }
 
         setInterval(async () => {
-            await sendScheduledMessages(client, session);
-            await sendAwbNotifierMessages(client, session);
+            // await sendScheduledMessages(client, session);
+            // await sendAwbNotifierMessages(client, session);
         }, process.env.SCHEDULE_INTERVAL);
     });
 
@@ -69,8 +69,8 @@ function createClient(session) {
             const customer = await fetchCustomerByPhoneNumber(session.user_id, phoneNumber);
 
             if (customer) {
-                await checkAndCreateAwb(session, message, customer);
-                await checkChatbotSchedule(session, message);
+                // await checkAndCreateAwb(session, message, customer);
+                // await checkChatbotSchedule(session, message);
             } else {
                 await addCustomerIfNotExists(session, message);
             }

@@ -2,23 +2,11 @@ require('dotenv').config();
 const mysql = require('mysql2/promise');
 const { initDB } = require('./config');
 
-const durationInDays = process.env.AWB_DURATION_DAYS || 0;
-
 //fetch
 async function fetchUnconnectedClients() {
     const connection = await initDB();
     const [rows] = await connection.execute(
         'SELECT * FROM chatbot_whatsapps WHERE deleted_at IS NULL'
-    );
-    connection.end();
-    return rows;
-}
-
-async function fetchCustomerAddersByUserId(userId) {
-    const connection = await initDB();
-    const [rows] = await connection.execute(
-        'SELECT * FROM customer_adders WHERE user_id = ? AND deleted_at IS NULL',
-        [userId]
     );
     connection.end();
     return rows;
@@ -75,14 +63,14 @@ async function checkAwbExists(customerId, logisticId, awbNumber) {
     return rows.length > 0;
 }
 
-async function fetchChatbotSchedulesByUserId(userId) {
+async function fetchChatbotScheduleByUserId(userId) {
     const connection = await initDB();
     const [rows] = await connection.execute(
         'SELECT * FROM chatbot_schedules WHERE user_id = ? AND deleted_at IS NULL',
         [userId]
     );
     connection.end();
-    return rows;
+    return rows.length > 0 ? rows[0] : null;
 }
 
 async function fetchAwbsByLogistic(logisticName) {
@@ -94,9 +82,9 @@ async function fetchAwbsByLogistic(logisticName) {
             INNER JOIN logistics ON awbs.logistic_id = logistics.id 
             WHERE logistics.name = ? 
               AND awbs.deleted_at IS NULL
-              AND awbs.created_at < DATE_ADD(NOW(), INTERVAL ? DAY)
+              AND awbs.has_closed = 0
         `,
-        [logisticName, durationInDays]
+        [logisticName]
     );
     connection.end();
     return rows;
@@ -260,13 +248,39 @@ async function markNotifierFromAwb(awbId, notifierId) {
 }
 
 //create
-async function createCustomer(userId, chatbotWhatsappId, whatsappNumber, name) {
+async function createCustomer(userId, whatsappNumber, name) {
     const connection = await initDB();
-    await connection.execute(
-        'INSERT INTO customers (user_id, chatbot_whatsapp_id, whatsapp_number, name, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
-        [userId, chatbotWhatsappId, whatsappNumber, name]
-    );
-    connection.end();
+
+    await connection.beginTransaction();
+
+    try {
+        const [customerResult] = await connection.execute(
+            'INSERT INTO customers (user_id, whatsapp_number, name, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
+            [userId, whatsappNumber, name]
+        );
+
+        const customerId = customerResult.insertId;
+
+        const [eventResult] = await connection.execute(
+            'INSERT INTO events (customer_id, status, created_at, updated_at) VALUES (?, ?, NOW(), NOW())',
+            [customerId, "new customer"]
+        );
+
+        const eventId = eventResult.insertId;
+
+        await connection.execute(
+            'UPDATE customers SET last_event_id = ? WHERE id = ?',
+            [eventId, customerId]
+        );
+
+        await connection.commit();
+    } catch (error) {
+        await connection.rollback();
+        console.error("Error occurred during the transaction: ", error);
+        throw error;
+    } finally {
+        connection.end();
+    }
 }
 
 async function createAwb(customerId, logisticId, awbNumber) {
@@ -285,7 +299,6 @@ module.exports = {
     updateNoMatchNumber,
     updateClientConnected,
     fetchCustomersByUserId,
-    fetchCustomerAddersByUserId,
     createCustomer,
     isUserActive,
     fetchCustomerByPhoneNumber,
@@ -293,7 +306,7 @@ module.exports = {
     fetchLogisticByName,
     createAwb,
     checkAwbExists,
-    fetchChatbotSchedulesByUserId,
+    fetchChatbotScheduleByUserId,
     updateCustomer,
     fetchAwbsByLogistic,
     updateAwbStatus,
