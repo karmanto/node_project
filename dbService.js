@@ -249,7 +249,7 @@ async function createCustomer(userId, whatsappNumber, name) {
         await connection.commit();
     } catch (error) {
         await connection.rollback();
-        throw error;
+        console.log("error create customer ", error.message);
     } finally {
         connection.end();
     }
@@ -280,7 +280,7 @@ async function updateCustomerOrder(customer, ageMatch, addressMatch, totalOrderM
         await connection.commit();
     } catch (error) {
         await connection.rollback();
-        throw error;
+        console.log("error update order customer ", error.message);
     } finally {
         connection.end();
     }
@@ -330,7 +330,7 @@ async function updateCustomerResi(customer, awbMatch, logisticMatch) {
         await connection.commit();
     } catch (error) {
         await connection.rollback();
-        throw error;
+        console.log("error update resi customer ", error.message);
     } finally {
         connection.end();
     }

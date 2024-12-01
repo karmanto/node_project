@@ -5,20 +5,31 @@ const {
     updateCustomerResi,
 } = require('./dbService');
 
+function getValueAfterString(str1, str2) {
+    const startPos = str1.indexOf(str2);
+    
+    if (startPos !== -1) {
+        const valueStartPos = startPos + str2.length;
+        const value = str1.substring(valueStartPos).trimStart().split('\n')[0];
+        return value;
+    }
+    
+    return null;
+}
+
 async function addCustomerIfNotExists(session, message) {
     const chatbotSchedule = await fetchChatbotScheduleByUserId(session.user_id);
     const isFromMe = message.fromMe;
     const phoneNumber = message.to.split('@')[0];
-
-    if (chatbotSchedule && 
-        chatbotSchedule.chatbot_closing === session.id && 
-        message.body.includes(chatbotSchedule.trigger_new_customer) &&
-        isFromMe
-        ) {
-        try {
+    if (chatbotSchedule.trigger_new_customer) {
+        const triggerNewCustomer = chatbotSchedule.trigger_new_customer.replace(/\r/g, "");
+    
+        if (chatbotSchedule && 
+            chatbotSchedule.chatbot_closing === session.id && 
+            message.body.includes(triggerNewCustomer) &&
+            isFromMe
+            ) {
             await createCustomer(session.user_id, phoneNumber, "user " + phoneNumber);
-        } catch (error) {
-            console.log("error create customer ", error.message);
         }
     }
 }
@@ -27,34 +38,35 @@ async function checkTriggerOrder(session, message, customer) {
     const chatbotSchedule = await fetchChatbotScheduleByUserId(session.user_id);
     const isFromMe = message.fromMe;
 
-    let ageMatch = null;
-    let addressMatch = null;
-    let totalOrderMatch = null;
+    if (chatbotSchedule.trigger_order) {
+        const triggerOrder = chatbotSchedule.trigger_order.replace(/\r/g, "");
 
-    if (chatbotSchedule.age_pattern) {
-        const agePattern = new RegExp(`${chatbotSchedule.age_pattern}\\s*:\\s*(\\S*)\\s*(?:\\n|$)`);
-        ageMatch = message.body.match(agePattern);
-    }
+        let ageMatch = null;
+        let addressMatch = null;
+        let totalOrderMatch = null;
 
-    if (chatbotSchedule.address_pattern) {
-        const addressPattern = new RegExp(`${chatbotSchedule.address_pattern}\\s*:\\s*(\\S*)\\s*(?:\\n|$)`);
-        addressMatch = message.body.match(addressPattern);
-    }
+        if (chatbotSchedule.age_pattern) {
+            ageMatch = getValueAfterString(message.body, chatbotSchedule.age_pattern);
+        }
 
-    if (chatbotSchedule.total_order_pattern) {
-        const totalOrderPattern = new RegExp(`${chatbotSchedule.total_order_pattern}\\s*:\\s*(\\S*)\\s*(?:\\n|$)`);
-        totalOrderMatch = message.body.match(totalOrderPattern);
-    }
+        if (chatbotSchedule.address_pattern) {
+            addressMatch = getValueAfterString(message.body, chatbotSchedule.address_pattern);
+        }
 
-    if (chatbotSchedule && 
-        chatbotSchedule.chatbot_repeat === session.id && 
-        message.body.includes(chatbotSchedule.trigger_order) &&
-        isFromMe
-        ) {
-        try {
+        if (chatbotSchedule.total_order_pattern) {
+            totalOrderMatch = getValueAfterString(message.body, chatbotSchedule.total_order_pattern);
+
+            if (totalOrderMatch) {
+                totalOrderMatch = parseInt(totalOrderMatch.replace(/[^0-9]+/g, ''), 10);
+            }
+        }
+
+        if (chatbotSchedule && 
+            chatbotSchedule.chatbot_repeat === session.id && 
+            message.body.includes(triggerOrder) &&
+            isFromMe
+            ) {
             await updateCustomerOrder(customer, ageMatch, addressMatch, totalOrderMatch);
-        } catch (error) {
-            console.log("error update trigger order customer ", error.message);
         }
     }
 }
@@ -63,28 +75,26 @@ async function checkTriggerResi(session, message, customer) {
     const chatbotSchedule = await fetchChatbotScheduleByUserId(session.user_id);
     const isFromMe = message.fromMe;
 
-    let awbMatch = null;
-    let logisticMatch = null;
+    if (chatbotSchedule.trigger_update_awb) {
+        const triggerUpdateAWB = chatbotSchedule.trigger_update_awb.replace(/\r/g, "");
 
-    if (chatbotSchedule.awb_pattern) {
-        const awbPattern = new RegExp(`${chatbotSchedule.awb_pattern}\\s*:\\s*(\\S*)\\s*(?:\\n|$)`);
-        awbMatch = message.body.match(awbPattern);
-    }
+        let awbMatch = null;
+        let logisticMatch = null;
 
-    if (chatbotSchedule.logistic_pattern) {
-        const logisticPattern = new RegExp(`${chatbotSchedule.logistic_pattern}\\s*:\\s*(\\S*)\\s*(?:\\n|$)`);
-        logisticMatch = message.body.match(logisticPattern);
-    }
+        if (chatbotSchedule.awb_pattern) {
+            awbMatch = getValueAfterString(message.body, chatbotSchedule.awb_pattern);
+        }
 
-    if (chatbotSchedule && 
-        chatbotSchedule.chatbot_repeat === session.id && 
-        message.body.includes(chatbotSchedule.trigger_update_awb) &&
-        isFromMe
-        ) {
-        try {
+        if (chatbotSchedule.logistic_pattern) {
+            logisticMatch = getValueAfterString(message.body, chatbotSchedule.logistic_pattern);
+        }
+
+        if (chatbotSchedule && 
+            chatbotSchedule.chatbot_repeat === session.id && 
+            message.body.includes(triggerUpdateAWB) &&
+            isFromMe
+            ) {
             await updateCustomerResi(customer, awbMatch, logisticMatch);
-        } catch (error) {
-            console.log("error update trigger order customer ", error.message);
         }
     }
 }
