@@ -33,36 +33,6 @@ async function fetchCustomerByPhoneNumber(userId, phoneNumber) {
     return rows.length > 0 ? rows[0] : null;
 }
 
-async function fetchAwbAddersByUserId(userId) {
-    const connection = await initDB();
-    const [rows] = await connection.execute(
-        'SELECT * FROM awb_adders WHERE user_id = ? AND deleted_at IS NULL',
-        [userId]
-    );
-    connection.end();
-    return rows;
-}
-
-async function fetchLogisticByName(logisticName) {
-    const connection = await initDB();
-    const [rows] = await connection.execute(
-        'SELECT id FROM logistics WHERE name = ? AND deleted_at IS NULL',
-        [logisticName]
-    );
-    connection.end();
-    return rows.length > 0 ? rows[0].id : null;
-}
-
-async function checkAwbExists(customerId, logisticId, awbNumber) {
-    const connection = await initDB();
-    const [rows] = await connection.execute(
-        'SELECT id FROM awbs WHERE customer_id = ? AND logistic_id = ? AND awb_number = ? AND deleted_at IS NULL',
-        [customerId, logisticId, awbNumber]
-    );
-    connection.end();
-    return rows.length > 0;
-}
-
 async function fetchChatbotScheduleByUserId(userId) {
     const connection = await initDB();
     const [rows] = await connection.execute(
@@ -248,6 +218,9 @@ async function markNotifierFromAwb(awbId, notifierId) {
 }
 
 //create
+//
+
+//transaction
 async function createCustomer(userId, whatsappNumber, name) {
     const connection = await initDB();
 
@@ -276,20 +249,91 @@ async function createCustomer(userId, whatsappNumber, name) {
         await connection.commit();
     } catch (error) {
         await connection.rollback();
-        console.error("Error occurred during the transaction: ", error);
         throw error;
     } finally {
         connection.end();
     }
 }
 
-async function createAwb(customerId, logisticId, awbNumber) {
+async function updateCustomerOrder(customer, ageMatch, addressMatch, totalOrderMatch) {
     const connection = await initDB();
-    await connection.execute(
-        'INSERT INTO awbs (customer_id, logistic_id, awb_number, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
-        [customerId, logisticId, awbNumber]
-    );
-    connection.end();
+
+    await connection.beginTransaction();
+
+    try {
+        const [eventResult] = await connection.execute(
+            'INSERT INTO events (customer_id, status, total_order, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
+            [customer.id, "order", totalOrderMatch]
+        );
+
+        const eventId = eventResult.insertId;
+
+        await connection.execute(
+            `
+            UPDATE customers 
+            SET last_event_id = ?, age = ?, address = ? 
+            WHERE id = ? AND deleted_at IS NULL
+            `,
+            [eventId, ageMatch, addressMatch, customer.id]
+        );
+
+        await connection.commit();
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+    } finally {
+        connection.end();
+    }
+}
+
+async function updateCustomerResi(customer, awbMatch, logisticMatch) {
+    const connection = await initDB();
+
+    await connection.beginTransaction();
+
+    try {
+        const [eventResult] = await connection.execute(
+            'INSERT INTO events (customer_id, status, created_at, updated_at) VALUES (?, ?, NOW(), NOW())',
+            [customer.id, "awb release"]
+        );
+
+        const eventId = eventResult.insertId;
+        
+        await connection.execute(
+            `
+            UPDATE customers 
+            SET last_event_id = ?
+            WHERE id = ? AND deleted_at IS NULL
+            `,
+            [eventId, customer.id]
+        );
+        
+        const [logistics] = await connection.execute(
+            'SELECT id FROM logistics WHERE name = ? AND deleted_at IS NULL',
+            [logisticMatch]
+        );
+
+        if (logistics.length === 0) {
+            throw new Error(`No logistic found with the name: ${logisticMatch}`);
+        }
+
+        const logisticId = logistics[0].id;
+        
+        await connection.execute(
+            `
+            INSERT INTO awbs (customer_id, awb_number, logistic_id, created_at, updated_at)
+            VALUES (?, ?, ?, NOW(), NOW())
+            `,
+            [customer.id, awbMatch, logisticId]
+        );
+
+        await connection.commit();
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+    } finally {
+        connection.end();
+    }
 }
 
 module.exports = {
@@ -302,10 +346,6 @@ module.exports = {
     createCustomer,
     isUserActive,
     fetchCustomerByPhoneNumber,
-    fetchAwbAddersByUserId,
-    fetchLogisticByName,
-    createAwb,
-    checkAwbExists,
     fetchChatbotScheduleByUserId,
     updateCustomer,
     fetchAwbsByLogistic,
@@ -316,5 +356,7 @@ module.exports = {
     fetchAwbsByUserId,
     fetchAwbNotifiersByUserId,
     fetchNotifierDocuments,
-    markNotifierFromAwb
+    markNotifierFromAwb,
+    updateCustomerOrder,
+    updateCustomerResi,
 };

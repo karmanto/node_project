@@ -9,9 +9,11 @@ const {
     isUserActive,
     fetchCustomerByPhoneNumber,
 } = require('./dbService');
-const { addCustomerIfNotExists } = require('./cek-customer');
-const { checkAndCreateAwb } = require('./cek-awb');
-const { checkChatbotSchedule } = require('./cek-chatbot-schedule');
+const { 
+    addCustomerIfNotExists,
+    checkTriggerOrder,
+    checkTriggerResi,
+} = require('./cek-trigger');
 const { cekResiJne } = require('./cek-resi');
 const { sendScheduledMessages } = require('./send-schedule-messages');
 const { sendAwbNotifierMessages } = require('./send-awbnotifier-messages');
@@ -69,8 +71,8 @@ function createClient(session) {
             const customer = await fetchCustomerByPhoneNumber(session.user_id, phoneNumber);
 
             if (customer) {
-                // await checkAndCreateAwb(session, message, customer);
-                // await checkChatbotSchedule(session, message);
+                await checkTriggerOrder(session, message, customer);
+                await checkTriggerResi(session, message, customer);
             } else {
                 await addCustomerIfNotExists(session, message);
             }
