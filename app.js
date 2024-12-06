@@ -72,11 +72,13 @@ function createClient(session) {
                 const customer = await fetchCustomerByUserIdAndPhoneNumber(session.user_id, phoneNumber);
                 const chatbotSchedule = await fetchChatbotScheduleByUserId(session.user_id);
 
-                if (customer) {
-                    await checkTriggerOrder(session, message, customer, chatbotSchedule);
-                    await checkTriggerResi(session, message, customer, chatbotSchedule);
-                } else {
-                    await addCustomerIfNotExists(session, message, chatbotSchedule);
+                if (chatbotSchedule) {
+                    if (customer && chatbotSchedule.chatbot_repeat === session.id) {
+                        await checkTriggerOrder(message, customer, chatbotSchedule);
+                        await checkTriggerResi(message, customer, chatbotSchedule);
+                    } else if (!customer && chatbotSchedule.chatbot_closing === session.id) {
+                        await addCustomerIfNotExists(session, message, chatbotSchedule);
+                    }
                 }
             }
         }

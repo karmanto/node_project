@@ -23,16 +23,14 @@ async function addCustomerIfNotExists(session, message, chatbotSchedule) {
     if (chatbotSchedule.trigger_new_customer) {
         const triggerNewCustomer = chatbotSchedule.trigger_new_customer.replace(/\r/g, "");
     
-        if (chatbotSchedule && 
-            chatbotSchedule.chatbot_closing === session.id && 
-            message.body.includes(triggerNewCustomer)) 
+        if (message.body.includes(triggerNewCustomer)) 
         {
             await createCustomer(session.user_id, phoneNumber, "user " + phoneNumber);
         }
     }
 }
 
-async function checkTriggerOrder(session, message, customer, chatbotSchedule) {
+async function checkTriggerOrder(message, customer, chatbotSchedule) {
     const lastEvent = await fetchLastEventByCustomerId(customer.id);
 
     if (lastEvent.status !== "order" && lastEvent.status !== "awb release" && lastEvent.status !== "update awb" && lastEvent.status !== "in kurir") {
@@ -68,9 +66,7 @@ async function checkTriggerOrder(session, message, customer, chatbotSchedule) {
                 }
             }
     
-            if (chatbotSchedule && 
-                chatbotSchedule.chatbot_repeat === session.id && 
-                message.body.includes(triggerOrder)) 
+            if (message.body.includes(triggerOrder)) 
             {
                 await updateCustomerOrder(customer, nameMatch, ageMatch, addressMatch, totalOrderMatch);
             }
@@ -78,7 +74,7 @@ async function checkTriggerOrder(session, message, customer, chatbotSchedule) {
     }
 }
 
-async function checkTriggerResi(session, message, customer, chatbotSchedule) {
+async function checkTriggerResi(message, customer, chatbotSchedule) {
     const lastEvent = await fetchLastEventByCustomerId(customer.id);
 
     if (lastEvent.status === "order" && lastEvent.order_id && lastEvent.order_from === "whatsapp") {
@@ -96,9 +92,7 @@ async function checkTriggerResi(session, message, customer, chatbotSchedule) {
                 logisticMatch = getValueAfterString(message.body, chatbotSchedule.logistic_pattern);
             }
 
-            if (chatbotSchedule && 
-                chatbotSchedule.chatbot_repeat === session.id && 
-                message.body.includes(triggerUpdateAWB) ) 
+            if (message.body.includes(triggerUpdateAWB) ) 
             {
                 await updateCustomerResi(customer, awbMatch, logisticMatch, lastEvent);
             }
