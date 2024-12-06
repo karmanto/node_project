@@ -1,8 +1,8 @@
 const { 
-    fetchChatbotScheduleByUserId, 
     createCustomer,
     updateCustomerOrder, 
     updateCustomerResi,
+    fetchLastEventByCustomerId,
 } = require('./dbService');
 
 function getValueAfterString(str1, str2) {
@@ -17,84 +17,91 @@ function getValueAfterString(str1, str2) {
     return null;
 }
 
-async function addCustomerIfNotExists(session, message) {
-    const chatbotSchedule = await fetchChatbotScheduleByUserId(session.user_id);
-    const isFromMe = message.fromMe;
+async function addCustomerIfNotExists(session, message, chatbotSchedule) {
     const phoneNumber = message.to.split('@')[0];
+
     if (chatbotSchedule.trigger_new_customer) {
         const triggerNewCustomer = chatbotSchedule.trigger_new_customer.replace(/\r/g, "");
     
         if (chatbotSchedule && 
             chatbotSchedule.chatbot_closing === session.id && 
-            message.body.includes(triggerNewCustomer) &&
-            isFromMe
-            ) {
+            message.body.includes(triggerNewCustomer)) 
+        {
             await createCustomer(session.user_id, phoneNumber, "user " + phoneNumber);
         }
     }
 }
 
-async function checkTriggerOrder(session, message, customer) {
-    const chatbotSchedule = await fetchChatbotScheduleByUserId(session.user_id);
-    const isFromMe = message.fromMe;
+async function checkTriggerOrder(session, message, customer, chatbotSchedule) {
+    const lastEvent = await fetchLastEventByCustomerId(customer.id);
 
-    if (chatbotSchedule.trigger_order) {
-        const triggerOrder = chatbotSchedule.trigger_order.replace(/\r/g, "");
-
-        let ageMatch = null;
-        let addressMatch = null;
-        let totalOrderMatch = null;
-
-        if (chatbotSchedule.age_pattern) {
-            ageMatch = getValueAfterString(message.body, chatbotSchedule.age_pattern);
-        }
-
-        if (chatbotSchedule.address_pattern) {
-            addressMatch = getValueAfterString(message.body, chatbotSchedule.address_pattern);
-        }
-
-        if (chatbotSchedule.total_order_pattern) {
-            totalOrderMatch = getValueAfterString(message.body, chatbotSchedule.total_order_pattern);
-
-            if (totalOrderMatch) {
-                totalOrderMatch = parseInt(totalOrderMatch.replace(/[^0-9]+/g, ''), 10);
+    if (lastEvent.status !== "order" && lastEvent.status !== "awb release" && lastEvent.status !== "update awb" && lastEvent.status !== "in kurir") {
+        if (chatbotSchedule.trigger_order) {
+            const triggerOrder = chatbotSchedule.trigger_order.replace(/\r/g, "");
+    
+            let ageMatch = null;
+            let addressMatch = null;
+            let totalOrderMatch = null;
+            let nameMatch = null;
+    
+            if (chatbotSchedule.name_pattern) {
+                nameMatch = getValueAfterString(message.body, chatbotSchedule.name_pattern);
             }
-        }
-
-        if (chatbotSchedule && 
-            chatbotSchedule.chatbot_repeat === session.id && 
-            message.body.includes(triggerOrder) &&
-            isFromMe
-            ) {
-            await updateCustomerOrder(customer, ageMatch, addressMatch, totalOrderMatch);
+    
+            if (chatbotSchedule.age_pattern) {
+                ageMatch = getValueAfterString(message.body, chatbotSchedule.age_pattern);
+    
+                if (ageMatch) {
+                    ageMatch = parseInt(ageMatch.replace(/[^0-9]+/g, ''), 10);
+                }
+            }
+    
+            if (chatbotSchedule.address_pattern) {
+                addressMatch = getValueAfterString(message.body, chatbotSchedule.address_pattern);
+            }
+    
+            if (chatbotSchedule.total_order_pattern) {
+                totalOrderMatch = getValueAfterString(message.body, chatbotSchedule.total_order_pattern);
+    
+                if (totalOrderMatch) {
+                    totalOrderMatch = parseInt(totalOrderMatch.replace(/[^0-9]+/g, ''), 10);
+                }
+            }
+    
+            if (chatbotSchedule && 
+                chatbotSchedule.chatbot_repeat === session.id && 
+                message.body.includes(triggerOrder)) 
+            {
+                await updateCustomerOrder(customer, nameMatch, ageMatch, addressMatch, totalOrderMatch);
+            }
         }
     }
 }
 
-async function checkTriggerResi(session, message, customer) {
-    const chatbotSchedule = await fetchChatbotScheduleByUserId(session.user_id);
-    const isFromMe = message.fromMe;
+async function checkTriggerResi(session, message, customer, chatbotSchedule) {
+    const lastEvent = await fetchLastEventByCustomerId(customer.id);
 
-    if (chatbotSchedule.trigger_update_awb) {
-        const triggerUpdateAWB = chatbotSchedule.trigger_update_awb.replace(/\r/g, "");
+    if (lastEvent.status === "order" && lastEvent.order_id && lastEvent.order_from === "whatsapp") {
+        if (chatbotSchedule.trigger_update_awb) {
+            const triggerUpdateAWB = chatbotSchedule.trigger_update_awb.replace(/\r/g, "");
 
-        let awbMatch = null;
-        let logisticMatch = null;
+            let awbMatch = null;
+            let logisticMatch = null;
 
-        if (chatbotSchedule.awb_pattern) {
-            awbMatch = getValueAfterString(message.body, chatbotSchedule.awb_pattern);
-        }
+            if (chatbotSchedule.awb_pattern) {
+                awbMatch = getValueAfterString(message.body, chatbotSchedule.awb_pattern);
+            }
 
-        if (chatbotSchedule.logistic_pattern) {
-            logisticMatch = getValueAfterString(message.body, chatbotSchedule.logistic_pattern);
-        }
+            if (chatbotSchedule.logistic_pattern) {
+                logisticMatch = getValueAfterString(message.body, chatbotSchedule.logistic_pattern);
+            }
 
-        if (chatbotSchedule && 
-            chatbotSchedule.chatbot_repeat === session.id && 
-            message.body.includes(triggerUpdateAWB) &&
-            isFromMe
-            ) {
-            await updateCustomerResi(customer, awbMatch, logisticMatch);
+            if (chatbotSchedule && 
+                chatbotSchedule.chatbot_repeat === session.id && 
+                message.body.includes(triggerUpdateAWB) ) 
+            {
+                await updateCustomerResi(customer, awbMatch, logisticMatch, lastEvent);
+            }
         }
     }
 }

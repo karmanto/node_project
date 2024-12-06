@@ -7,7 +7,8 @@ const {
     updateNoMatchNumber,
     updateClientConnected,
     isUserActive,
-    fetchCustomerByPhoneNumber,
+    fetchCustomerByUserIdAndPhoneNumber,
+    fetchChatbotScheduleByUserId, 
 } = require('./dbService');
 const { 
     addCustomerIfNotExists,
@@ -15,8 +16,7 @@ const {
     checkTriggerResi,
 } = require('./cek-trigger');
 const { cekResiJne } = require('./cek-resi');
-const { sendScheduledMessages } = require('./send-schedule-messages');
-const { sendAwbNotifierMessages } = require('./send-awbnotifier-messages');
+const { sendScheduledFollowUpMessages } = require('./send-schedule-messages');
 
 let clients = {};
 
@@ -45,8 +45,7 @@ function createClient(session) {
         }
 
         setInterval(async () => {
-            // await sendScheduledMessages(client, session);
-            // await sendAwbNotifierMessages(client, session);
+            await sendScheduledFollowUpMessages(client, session);
         }, process.env.SCHEDULE_INTERVAL);
     });
 
@@ -65,16 +64,20 @@ function createClient(session) {
     });
 
     client.on('message_create', async message => {
-        if (await isUserActive(session.user_id)) {
-            const isFromMe = message.fromMe;
-            const phoneNumber = isFromMe ? message.to.split('@')[0] : message.from.split('@')[0];
-            const customer = await fetchCustomerByPhoneNumber(session.user_id, phoneNumber);
+        const isFromMe = message.fromMe;
+    
+        if (isFromMe) {
+            if (await isUserActive(session.user_id)) {
+                const phoneNumber = isFromMe ? message.to.split('@')[0] : message.from.split('@')[0];
+                const customer = await fetchCustomerByUserIdAndPhoneNumber(session.user_id, phoneNumber);
+                const chatbotSchedule = await fetchChatbotScheduleByUserId(session.user_id);
 
-            if (customer) {
-                await checkTriggerOrder(session, message, customer);
-                await checkTriggerResi(session, message, customer);
-            } else {
-                await addCustomerIfNotExists(session, message);
+                if (customer) {
+                    await checkTriggerOrder(session, message, customer, chatbotSchedule);
+                    await checkTriggerResi(session, message, customer, chatbotSchedule);
+                } else {
+                    await addCustomerIfNotExists(session, message, chatbotSchedule);
+                }
             }
         }
     });
