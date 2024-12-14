@@ -33,14 +33,26 @@ async function fetchCustomerByUserIdAndIsActive(userId) {
     return rows;
 }
 
-async function fetchEventsByCustomerIds(customerIds) {
+async function fetchEventsOrdersAwbsByCustomerIds(customerIds) {
     if (customerIds.length === 0) {
         return [];
     }
 
     const connection = await initDB();
     const [rows] = await connection.execute(
-        `SELECT * FROM events WHERE customer_id IN (${customerIds.map(() => '?').join(',')}) AND deleted_at IS NULL ORDER BY id ASC`,
+        `SELECT 
+            events.*, 
+            orders.status AS order_status,
+            orders.from AS order_from,
+            awbs.awb_number, 
+            awbs.last_awb_status,
+            awbs.last_awb_status_date
+         FROM events
+         LEFT JOIN orders ON events.order_id = orders.id AND orders.deleted_at IS NULL
+         LEFT JOIN awbs ON awbs.id = orders.awb_id AND awbs.deleted_at IS NULL
+         WHERE events.customer_id IN (${customerIds.map(() => '?').join(',')}) 
+           AND events.deleted_at IS NULL
+         ORDER BY events.id ASC`,
         customerIds
     );
     connection.end();
@@ -88,6 +100,16 @@ async function fetchChatbotScheduleByUserId(userId) {
     return rows.length > 0 ? rows[0] : null;
 }
 
+async function fetchDocumentsByChatbotScheduleId(ChatbotScheduleId) {
+    const connection = await initDB();
+    const [rows] = await connection.execute(
+        'SELECT * FROM documents WHERE chatbot_schedule_id = ? AND deleted_at IS NULL',
+        [ChatbotScheduleId]
+    );
+    connection.end();
+    return rows;
+}
+
 async function fetchAwbsByLogistic(logisticName) {
     const connection = await initDB();
     const [rows] = await connection.execute(
@@ -100,16 +122,6 @@ async function fetchAwbsByLogistic(logisticName) {
               AND awbs.has_closed = 0
         `,
         [logisticName]
-    );
-    connection.end();
-    return rows;
-}
-
-async function fetchNotifierDocuments(notifierId) {
-    const connection = await initDB();
-    const [rows] = await connection.execute(
-        'SELECT * FROM documents WHERE awb_notifier_id = ? AND deleted_at IS NULL',
-        [notifierId]
     );
     connection.end();
     return rows;
@@ -267,7 +279,7 @@ async function updateCustomerOrder(customer, nameMatch, ageMatch, addressMatch, 
         await connection.execute(
             `
             UPDATE customers 
-            SET name = ?, age = ?, address = ?, is_active = 1
+            SET name = ?, age = ?, address = ?, is_active = 0
             WHERE id = ? AND deleted_at IS NULL
             `,
             [nameMatch, ageMatch, addressMatch, customer.id]
@@ -341,6 +353,34 @@ async function updateCustomerResi(customer, awbMatch, logisticMatch, lastEvent) 
     }
 }
 
+async function createScheduleDone(saveEventData) {
+    const connection = await initDB();
+
+    await connection.beginTransaction();
+
+    try {
+        await connection.execute(
+            'INSERT INTO events (order_id, customer_id, status, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
+            [saveEventData.orderId, saveEventData.customerId, saveEventData.status]
+        );
+        
+        if (saveEventData.orderStatus) {
+            //
+        }
+
+        if (saveEventData.isCustomerActive !== null) {
+            //
+        }
+
+        await connection.commit();
+    } catch (error) {
+        await connection.rollback();
+        console.log("error create event done ", error.message);
+    } finally {
+        connection.end();
+    }
+}
+
 module.exports = {
     fetchUnconnectedClients,
     resetClientData,
@@ -351,7 +391,7 @@ module.exports = {
     createCustomer,
     isUserActive,
     fetchCustomerByUserIdAndIsActive,
-    fetchEventsByCustomerIds,
+    fetchEventsOrdersAwbsByCustomerIds,
     fetchCustomerByUserIdAndPhoneNumber,
     fetchChatbotScheduleByUserId,
     updateCustomer,
@@ -359,9 +399,10 @@ module.exports = {
     updateAwbStatus,
     fetchAwbsByUserId,
     fetchAwbNotifiersByUserId,
-    fetchNotifierDocuments,
     markNotifierFromAwb,
     updateCustomerOrder,
     updateCustomerResi,
     fetchLastEventByCustomerId,
+    fetchDocumentsByChatbotScheduleId,
+    createScheduleDone,
 };

@@ -4,18 +4,9 @@ const {
     updateCustomerResi,
     fetchLastEventByCustomerId,
 } = require('./dbService');
-
-function getValueAfterString(str1, str2) {
-    const startPos = str1.indexOf(str2);
-    
-    if (startPos !== -1) {
-        const valueStartPos = startPos + str2.length;
-        const value = str1.substring(valueStartPos).trimStart().split('\n')[0];
-        return value;
-    }
-    
-    return null;
-}
+const {
+    getValueAfterString,
+} = require('./helpers/util');
 
 async function addCustomerIfNotExists(session, message, chatbotSchedule) {
     const phoneNumber = message.to.split('@')[0];

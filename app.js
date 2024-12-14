@@ -16,7 +16,7 @@ const {
     checkTriggerResi,
 } = require('./cek-trigger');
 const { cekResiJne } = require('./cek-resi');
-const { sendScheduledFollowUpMessages } = require('./send-schedule-messages');
+const { sendScheduledMessages } = require('./send-schedule-messages');
 
 let clients = {};
 
@@ -34,19 +34,30 @@ function createClient(session) {
     });
 
     client.on('ready', async () => {
-        console.log(`Client ID ${session.id} is ready!`);
-        const phoneNumber = client?.info?.wid?.user;
-        if (phoneNumber) {
-            try {
-                await updateClientConnected(session.id, phoneNumber);
-            } catch (error) {
-                console.log("error update client connection ", error.message);
-            }
-        }
+        if (!clients[session.id].scheduleIntervalId) {
+            console.log(`Client ID ${session.id} is ready!`);
+            const phoneNumber = client?.info?.wid?.user;
 
-        setInterval(async () => {
-            await sendScheduledFollowUpMessages(client, session);
-        }, process.env.SCHEDULE_INTERVAL);
+            if (phoneNumber) {
+                try {
+                    await updateClientConnected(session.id, phoneNumber);
+                } catch (error) {
+                    console.log("error update client connection ", error.message);
+                }
+            }
+
+            scheduleIntervalId = setInterval(async () => {
+                try {
+                    await sendScheduledMessages(client, session);
+                } catch (error) {
+                    console.log("error send schedule message", error);
+                }
+            }, process.env.SCHEDULE_INTERVAL);
+
+            clients[session.id].scheduleIntervalId = scheduleIntervalId;
+
+            console.log(`Client ID ${session.id} success create interval with id ${scheduleIntervalId}.`);
+        }
     });
 
     client.on('authenticated', () => {
@@ -59,6 +70,12 @@ function createClient(session) {
 
     client.on('disconnected', (reason) => {
         console.log(`Client ID ${session.id} disconnected: ${reason}`);
+
+        if (clients[session.id]?.scheduleIntervalId) {
+            clearInterval(clients[session.id].scheduleIntervalId);
+            console.log(`Interval for Client ID ${session.id} cleared.`);
+        }
+
         clients[session.id].destroy(); 
         delete clients[session.id];
     });
@@ -69,10 +86,10 @@ function createClient(session) {
         if (isFromMe) {
             if (await isUserActive(session.user_id)) {
                 const phoneNumber = isFromMe ? message.to.split('@')[0] : message.from.split('@')[0];
-                const customer = await fetchCustomerByUserIdAndPhoneNumber(session.user_id, phoneNumber);
                 const chatbotSchedule = await fetchChatbotScheduleByUserId(session.user_id);
 
                 if (chatbotSchedule) {
+                    const customer = await fetchCustomerByUserIdAndPhoneNumber(session.user_id, phoneNumber);
                     if (customer && chatbotSchedule.chatbot_repeat === session.id) {
                         await checkTriggerOrder(message, customer, chatbotSchedule);
                         await checkTriggerResi(message, customer, chatbotSchedule);
@@ -106,6 +123,11 @@ async function initializeUnconnectedClients() {
                     console.log("error no match number ", error.message);
                 }
 
+                if (clients[session.id]?.scheduleIntervalId) {
+                    clearInterval(clients[session.id].scheduleIntervalId);
+                    console.log(`Interval for Client ID ${session.id} cleared.`);
+                }
+
                 clients[session.id].destroy(); 
                 delete clients[session.id];
             } else if (!session.is_active) {
@@ -114,6 +136,11 @@ async function initializeUnconnectedClients() {
                     await updateNoMatchNumber(session.id);
                 } catch (error) {
                     console.log("error no match number ", error.message);
+                }
+
+                if (clients[session.id]?.scheduleIntervalId) {
+                    clearInterval(clients[session.id].scheduleIntervalId);
+                    console.log(`Interval for Client ID ${session.id} cleared.`);
                 }
 
                 clients[session.id].destroy(); 
@@ -125,6 +152,12 @@ async function initializeUnconnectedClients() {
     for (const clientId in clients) {
         if (!activeClientIds.includes(Number(clientId))) {
             console.log(`Deleting session for client ID ${clientId} as it has been deleted.`);
+
+            if (clients[clientId]?.scheduleIntervalId) {
+                clearInterval(clients[clientId].scheduleIntervalId);
+                console.log(`Interval for Client ID ${clientId} cleared.`);
+            }
+            
             clients[clientId].destroy(); 
             delete clients[clientId];
         }

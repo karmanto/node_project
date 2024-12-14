@@ -101,7 +101,18 @@ const cekResiJne = async () => {
                             await updateAwbStatus(noResi, status, null);
                         }
                     } else {
-                        await updateAwbStatus(noResi, status, null);
+                        const lastValidDate = await columns[5].getText();
+                        const parsedDate = new Date(lastValidDate);
+                    
+                        const year = parsedDate.getFullYear();
+                        const month = String(parsedDate.getMonth() + 1).padStart(2, "0");
+                        const day = String(parsedDate.getDate()).padStart(2, "0");
+                        const hours = String(parsedDate.getHours()).padStart(2, "0");
+                        const minutes = String(parsedDate.getMinutes()).padStart(2, "0");
+                        const seconds = String(parsedDate.getSeconds()).padStart(2, "0");
+
+                        const date = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+                        await updateAwbStatus(noResi, status, date);
                     }
                 } else {
                     await updateAwbStatus(noResi, "Data tidak ditemukan", null);

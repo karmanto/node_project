@@ -1,71 +1,98 @@
+require('dotenv').config();
 const { MessageMedia } = require('whatsapp-web.js');
 const {
     fetchChatbotScheduleByUserId, 
     fetchCustomerByUserIdAndIsActive,
-    fetchEventsByCustomerIds,
-    fetchAwbsByUserId,
+    fetchEventsOrdersAwbsByCustomerIds,
+    fetchDocumentsByChatbotScheduleId,
+    createScheduleDone,
 } = require('./dbService');
+const {
+    iterationEvents,
+    sendingDate,
+} = require('./helpers/util');
 
-const convertHourToTimeFormat = (hour) => {
-    if (typeof hour !== 'number' || hour < 0 || hour > 23) {
-        return `00:00:00`;
-    }
+function createDefaultSaveEventData() {
+    return {
+        orderId: null,
+        customerId: null,
+        status: null,
+        orderStatus: null,
+        isCustomerActive: null,
+    };
+}
 
-    const formattedHour = hour.toString().padStart(2, '0');
-    return `${formattedHour}:00:00`;
-};
+async function handleCustomerFollowUps(client, customer, schedule, documents, session) {
+    const resultItrEvents = iterationEvents(customer.events);
 
-async function sendScheduledFollowUpMessages(client, session) {
-    const chatbotSchedule = await fetchChatbotScheduleByUserId(session.user_id);
+    const followUps = [
+        { fuType: 'fu3', delayDays: 3, eventCondition: 'new customer' },
+        { fuType: 'fu7', delayDays: 7, eventCondition: 'fu3 new customer' },
+        { fuType: 'fu14', delayDays: 14, eventCondition: 'fu7 new customer' },
+        { fuType: 'fu21', delayDays: 21, eventCondition: 'fu14 new customer' },
+        { fuType: 'fu25', delayDays: 25, eventCondition: 'fu21 new customer' },
+    ];
 
-    if (session.id === chatbotSchedule.chatbot_closing || session.id === chatbotSchedule.chatbot_repeat) {
-        const customers = await fetchCustomerByUserIdAndIsActive(session.user_id);
+    if (session.id === schedule.chatbot_closing && resultItrEvents.eventTemp === "new customer") {
+        for (const { fuType, delayDays, eventCondition } of followUps) {
+            if (resultItrEvents.lastEvent === eventCondition) {
+                const message = schedule[`message_${fuType}`];
+                const documentType = `${fuType}_doc`;
+                const sendDate = sendingDate(schedule.gmt_time_sending, schedule.time_sending, resultItrEvents.newCustomerDate, delayDays);
 
-        if (customers.length > 0) {
-            const gmtOffset = chatbotSchedule.gmt_time_sending || 0;
-            const timeSending = convertHourToTimeFormat(chatbotSchedule.time_sending);
-            const customerIds = customers.map(customer => customer.id);
-            const events = await fetchEventsByCustomerIds(customerIds);
-            const awbsByUser = await fetchAwbsByUserId(session.user_id);
+                if (sendDate && message) {
+                    const document = documents.find(doc => doc.type === documentType);
+                    const numberDetails = await client.getNumberId(customer.whatsapp_number);
 
-            const eventsByCustomerId = events.reduce((acc, event) => {
-                if (!acc[event.customer_id]) {
-                    acc[event.customer_id] = [];
-                }
-                acc[event.customer_id].push(event);
-                return acc;
-            }, {});
+                    if (numberDetails) {
+                        const media = document
+                            ? MessageMedia.fromFilePath(process.env.LARAVEL_STORAGE_PATH + document.filepath)
+                            : null;
 
+                        await client.sendMessage(
+                            numberDetails._serialized,
+                            message,
+                            media ? { media } : {}
+                        );
 
-            for (const customer of customers) {
-                customer.events = eventsByCustomerId[customer.id] || [];
+                        const saveEventData = createDefaultSaveEventData();
+                        saveEventData.customerId = customer.id;
+                        saveEventData.status = `${fuType} new customer`;
+                        if (fuType === 'fu25') saveEventData.isCustomerActive = true;
 
-                let eventTemp = "";
-                let newCustomerDate;
-                let awbId;
+                        await createScheduleDone(saveEventData);
 
-                for (const event of customer.events) {
-                    if (event.status === "new customer" && eventTemp === "") {
-                        eventTemp = "new customer";
-                    } else if (event.status === "order" && eventTemp === "new customer") {
-                        eventTemp = "order";
-                    } else if (event.status === "awb release" && eventTemp === "order") {
-                        eventTemp = "awb release";
-                    } else if (event.status === "delivered" && eventTemp === "awb release") {
-                        eventTemp = "closing";
-                    } else if (event.status === "order" && eventTemp === "closing") {
-                        eventTemp = "order repeat";
-                    } else if (event.status === "awb release" && eventTemp === "order repeat") {
-                        eventTemp = "awb release repeat";
-                    } else if (event.status === "delivered" && eventTemp === "awb release repeat") {
-                        eventTemp = "repeat";
-                    } else if (event.status === "order" && eventTemp === "repeat") {
-                        eventTemp = "order repeat";
-                    } 
+                        break; 
+                    }
                 }
             }
         }
     }
 }
 
-module.exports = { sendScheduledFollowUpMessages };
+async function sendScheduledMessages(client, session) {
+    const chatbotSchedule = await fetchChatbotScheduleByUserId(session.user_id);
+
+    if (chatbotSchedule && (session.id === chatbotSchedule.chatbot_closing || session.id === chatbotSchedule.chatbot_repeat)) {
+        const customers = await fetchCustomerByUserIdAndIsActive(session.user_id);
+
+        if (customers.length > 0) {
+            const customerIds = customers.map(customer => customer.id);
+            const events = await fetchEventsOrdersAwbsByCustomerIds(customerIds);
+            const documents = await fetchDocumentsByChatbotScheduleId(chatbotSchedule.id);
+
+            const eventsByCustomerId = events.reduce((acc, event) => {
+                if (!acc[event.customer_id]) acc[event.customer_id] = [];
+                acc[event.customer_id].push(event);
+                return acc;
+            }, {});
+
+            for (const customer of customers) {
+                customer.events = eventsByCustomerId[customer.id] || [];
+                await handleCustomerFollowUps(client, customer, chatbotSchedule, documents, session);
+            }
+        }
+    }
+}
+
+module.exports = { sendScheduledMessages };
