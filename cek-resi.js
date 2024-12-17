@@ -55,67 +55,87 @@ const cekResiJne = async () => {
                 const noResi = await columns[1].getText();
 
                 if (columns.length > 8) {
-                    const status = await columns[7].getText();
+                    const linkRedirect = await columns[8].findElement(By.css('a'));
+                    await driver.executeScript("arguments[0].click();", linkRedirect);
 
-                    if (status === "ON PROCESS") {
-                        const linkRedirect = await columns[8].findElement(By.css('a'));
-                        await driver.executeScript("arguments[0].click();", linkRedirect);
+                    await driver.sleep(1000);
 
+                    await driver.wait(() => {
+                        return driver.executeScript('return document.readyState').then((readyState) => {
+                            return readyState === 'complete';
+                        });
+                    });
+
+                    const windowHandles = await driver.getAllWindowHandles();
+                    if (windowHandles.length > 0) {
+                        await driver.switchTo().window(windowHandles[1]);
                         await driver.sleep(1000);
 
-                        await driver.wait(() => {
-                            return driver.executeScript('return document.readyState').then((readyState) => {
-                                return readyState === 'complete';
-                            });
-                        });
+                        const timelineElement = await driver.findElement(By.css('ul.timeline.widget'));
+                        const timelineItemsElement = await timelineElement.findElements(By.css('li'));
+                        const destinationElement = await driver.findElement(By.css('.tile_stats_count:nth-child(3) h4'));
+                        const destinationValue = await destinationElement.getText();
 
-                        const windowHandles = await driver.getAllWindowHandles();
-                        if (windowHandles.length > 0) {
-                            await driver.switchTo().window(windowHandles[1]);
-                            await driver.sleep(1000);
+                        const estimateDaysElement = await driver.findElement(By.css('.tile_stats_count:nth-child(4) h3'));
+                        const estimatedaysValue = await estimateDaysElement.getText();
+                        const estimatedDays = estimatedaysValue.match(/\d+/)[0];
 
-                            const timeline = await driver.findElement(By.css('ul.timeline.widget'));
-                            const timelineItems = await timeline.findElements(By.css('li'));
+                        let lastValidStatus = null;
+                        let lastValidStatusDate = null;
+                        let shipmentReceivedDate = null;
 
-                            let lastValidStatus = "";
-                            let date = "";
-                            for (let i = timelineItems.length - 1; i >= 0; i--) {
-                                const text = await timelineItems[i].getText();
+                        for (let i = 0; i < timelineItemsElement.length; i++) {
+                            const text = await timelineItemsElement[i].getText();
 
-                                if (text.trim() !== "") {
-                                    lastValidStatus = text.split("\n")[0] ?? "";
-
-                                    const lastValidDate = text.split("\n")[1] ?? "";
-                                    const dateSplit = lastValidDate.split(" ");
+                            if (i === 0) {
+                                const validDate = text.split("\n")[1] ?? "";
+                                if (validDate) {
+                                    lastValidStatus = "delivering";
+                                    const dateSplit = validDate.split(" ");
                                     const [day, month, year] = dateSplit[0].split("-");
-                                    date = `${year}-${month}-${day} ${dateSplit[1]}:00`;
+                                    shipmentReceivedDate = `${year}-${month}-${day} ${dateSplit[1]}:00`;
+                                    lastValidStatusDate = shipmentReceivedDate;
+                                }
+                            } else {
+                                const validStatus = text.split("\n")[0] ?? "";
+                                const validDate = text.split("\n")[1] ?? "";
+
+                                if (validStatus.includes("RETURN SHIPMENT")) {
+                                    lastValidStatus = "retur";
+                                    if (validDate) {
+                                        const dateSplit = validDate.split(" ");
+                                        const [day, month, year] = dateSplit[0].split("-");
+                                        lastValidStatusDate = `${year}-${month}-${day} ${dateSplit[1]}:00`;
+                                    }
                                     break;
+                                } else if (validStatus.includes("DELIVERED")) {
+                                    lastValidStatus = "delivered";
+                                    if (validDate) {
+                                        const dateSplit = validDate.split(" ");
+                                        const [day, month, year] = dateSplit[0].split("-");
+                                        lastValidStatusDate = `${year}-${month}-${day} ${dateSplit[1]}:00`;
+                                    }
+                                    break;
+                                } else if (validStatus.includes("WITH DELIVERY COURIER") && validStatus.includes(destinationValue)) {
+                                    lastValidStatus = "in kurir";
+                                    if (validDate) {
+                                        const dateSplit = validDate.split(" ");
+                                        const [day, month, year] = dateSplit[0].split("-");
+                                        lastValidStatusDate = `${year}-${month}-${day} ${dateSplit[1]}:00`;
+                                    }
                                 }
                             }
-
-                            await driver.close();
-                            await driver.switchTo().window(windowHandles[0]);
-
-                            await updateAwbStatus(noResi, lastValidStatus, date);
-                        } else {
-                            await updateAwbStatus(noResi, status, null);
                         }
-                    } else {
-                        const lastValidDate = await columns[5].getText();
-                        const parsedDate = new Date(lastValidDate);
-                    
-                        const year = parsedDate.getFullYear();
-                        const month = String(parsedDate.getMonth() + 1).padStart(2, "0");
-                        const day = String(parsedDate.getDate()).padStart(2, "0");
-                        const hours = String(parsedDate.getHours()).padStart(2, "0");
-                        const minutes = String(parsedDate.getMinutes()).padStart(2, "0");
-                        const seconds = String(parsedDate.getSeconds()).padStart(2, "0");
 
-                        const date = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-                        await updateAwbStatus(noResi, status, date);
+                        await driver.close();
+                        await driver.switchTo().window(windowHandles[0]);
+
+                        await updateAwbStatus(noResi, lastValidStatus, lastValidStatusDate, shipmentReceivedDate, estimatedDays);
+                    } else {
+                        await updateAwbStatus(noResi, "Data tidak ditemukan", null, null, null);
                     }
                 } else {
-                    await updateAwbStatus(noResi, "Data tidak ditemukan", null);
+                    await updateAwbStatus(noResi, "Data tidak ditemukan", null, null, null);
                 }
             }
         }

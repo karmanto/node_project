@@ -24,7 +24,7 @@ async function addCustomerIfNotExists(session, message, chatbotSchedule) {
 async function checkTriggerOrder(message, customer, chatbotSchedule) {
     const lastEvent = await fetchLastEventByCustomerId(customer.id);
 
-    if (lastEvent.status !== "order" && lastEvent.status !== "awb release" && lastEvent.status !== "update awb" && lastEvent.status !== "in kurir") {
+    if (lastEvent.status !== "order" && lastEvent.status !== "awb release" && lastEvent.status !== "delivering" && lastEvent.status !== "in kurir") {
         if (chatbotSchedule.trigger_order) {
             const triggerOrder = chatbotSchedule.trigger_order.replace(/\r/g, "");
     

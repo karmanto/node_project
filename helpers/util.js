@@ -19,9 +19,7 @@ function getValueAfterString(str1, str2) {
 function iterationEvents(events) {
     let result = {
         eventTemp: "",
-        newCustomerDate: null,
-        closingDate: null,
-        repeatDate: null,
+        baseDate: null,
         awbNumber: null,
         lastEvent: null
     };
@@ -31,7 +29,7 @@ function iterationEvents(events) {
             condition: (event) => event.status === "new customer" && result.eventTemp === "",
             action: (event) => {
                 result.eventTemp = "new customer";
-                result.newCustomerDate = event.created_at;
+                result.baseDate = event.created_at;
             }
         },
         "order new customer": {
@@ -48,10 +46,10 @@ function iterationEvents(events) {
             }
         },
         "closing": {
-            condition: (event) => event.status === "delivered" && result.eventTemp === "awb release new customer",
+            condition: (event) => event.status === "closing" && result.eventTemp === "awb release new customer",
             action: (event) => {
                 result.eventTemp = "closing";
-                result.closingDate = event.created_at;
+                result.baseDate = event.created_at;
             }
         },
         "retur new customer": {
@@ -74,10 +72,10 @@ function iterationEvents(events) {
             }
         },
         "repeat": {
-            condition: (event) => event.status === "delivered" && result.eventTemp === "awb release after closing",
+            condition: (event) => event.status === "repeat" && result.eventTemp === "awb release after closing",
             action: (event) => {
                 result.eventTemp = "repeat";
-                result.repeatDate = event.created_at;
+                result.baseDate = event.created_at;
             }
         },
         "retur after closing": {
@@ -103,7 +101,7 @@ function iterationEvents(events) {
             condition: (event) => event.status === "delivered" && result.eventTemp === "awb release after repeat",
             action: (event) => {
                 result.eventTemp = "repeat";
-                result.repeatDate = event.created_at;
+                result.baseDate = event.created_at;
             }
         },
         "retur after repeat": {
@@ -122,7 +120,7 @@ function iterationEvents(events) {
             }
         }
 
-        result.lastEvent = event.status;
+        result.lastEvent = event;
     }
 
     return result;
@@ -151,8 +149,8 @@ function createDefaultSaveEventData() {
     return {
         orderId: null,
         customerId: null,
+        awbId: null,
         status: null,
-        orderStatus: null,
         isCustomerActive: null,
     };
 }
@@ -160,47 +158,208 @@ function createDefaultSaveEventData() {
 async function handleCustomerFollowUps(client, customer, schedule, documents, session) {
     const resultItrEvents = iterationEvents(customer.events);
 
-    const followUps = [
-        { fuType: 'fu3', delayDays: 3, eventCondition: 'new customer' },
-        { fuType: 'fu7', delayDays: 7, eventCondition: 'fu3 new customer' },
-        { fuType: 'fu14', delayDays: 14, eventCondition: 'fu7 new customer' },
-        { fuType: 'fu21', delayDays: 21, eventCondition: 'fu14 new customer' },
-        { fuType: 'fu25', delayDays: 25, eventCondition: 'fu21 new customer' },
-    ];
+    const followUpTypes = {
+        chatbot_new_customer: [
+            { fuType: 'fu3', delayDays: 3, lastEventCondition: 'new customer', statusToSave: "fu3 new customer" },
+            { fuType: 'fu7', delayDays: 7, lastEventCondition: 'fu3 new customer', statusToSave: "fu7 new customer" },
+            { fuType: 'fu14', delayDays: 14, lastEventCondition: 'fu7 new customer', statusToSave: "fu14 new customer" },
+            { fuType: 'fu21', delayDays: 21, lastEventCondition: 'fu14 new customer', statusToSave: "fu21 new customer" },
+            { fuType: 'fu25', delayDays: 25, lastEventCondition: 'fu21 new customer', statusToSave: "fu25 new customer" },
+        ],
+        chatbot_after_closing: [
+            { fuType: 'fu3ac', delayDays: 3, lastEventCondition: 'closing', statusToSave: "fu3 after closing" },
+            { fuType: 'fu7ac', delayDays: 7, lastEventCondition: 'fu3 after closing', statusToSave: "fu7 after closing" },
+            { fuType: 'fu14ac', delayDays: 14, lastEventCondition: 'fu7 after closing', statusToSave: "fu14 after closing" },
+            { fuType: 'fu21ac', delayDays: 21, lastEventCondition: 'fu14 after closing', statusToSave: "fu21 after closing" },
+            { fuType: 'fu25ac', delayDays: 25, lastEventCondition: 'fu21 after closing', statusToSave: "fu25 after closing" },
+        ],
+        chatbot_after_repeat: [
+            { fuType: 'fu3ar', delayDays: 3, lastEventCondition: 'repeat', statusToSave: "fu3 after repeat" },
+            { fuType: 'fu7ar', delayDays: 7, lastEventCondition: 'fu3 after repeat', statusToSave: "fu7 after repeat" },
+            { fuType: 'fu14ar', delayDays: 14, lastEventCondition: 'fu7 after repeat', statusToSave: "fu14 after repeat" },
+            { fuType: 'fu21ar', delayDays: 21, lastEventCondition: 'fu14 after repeat', statusToSave: "fu21 after repeat" },
+            { fuType: 'fu25ar', delayDays: 25, lastEventCondition: 'fu21 after repeat', statusToSave: "fu25 after repeat" },
+        ],
+    };
 
-    if (session.id === schedule.chatbot_closing && resultItrEvents.eventTemp === "new customer") {
-        for (const { fuType, delayDays, eventCondition } of followUps) {
-            if (resultItrEvents.lastEvent === eventCondition) {
+    const followUps = session.id === schedule.chatbot_closing && resultItrEvents.eventTemp === "new customer"
+        ? followUpTypes.chatbot_new_customer
+        : session.id === schedule.chatbot_repeat && resultItrEvents.eventTemp === "closing"
+            ? followUpTypes.chatbot_after_closing
+            : session.id === schedule.chatbot_repeat && resultItrEvents.eventTemp === "repeat"
+                ? followUpTypes.chatbot_after_repeat
+                : null;
+
+    if (followUps) {
+        for (const { fuType, delayDays, lastEventCondition, statusToSave } of followUps) {
+            if (resultItrEvents.lastEvent.status === lastEventCondition) {
                 const message = schedule[`message_${fuType}`];
                 const documentType = `${fuType}_doc`;
-                const sendDate = sendingDate(schedule.gmt_time_sending, schedule.time_sending, resultItrEvents.newCustomerDate, delayDays);
-
+                const sendDate = sendingDate(schedule.gmt_time_sending, schedule.time_sending, resultItrEvents.baseDate, delayDays);
+    
                 if (sendDate && message) {
                     const document = documents.find(doc => doc.type === documentType);
                     const numberDetails = await client.getNumberId(customer.whatsapp_number);
-
+    
                     if (numberDetails) {
                         const media = document
                             ? MessageMedia.fromFilePath(process.env.LARAVEL_STORAGE_PATH + document.filepath)
                             : null;
-
+    
                         await client.sendMessage(
                             numberDetails._serialized,
                             message,
                             media ? { media } : {}
                         );
-
+    
                         const saveEventData = createDefaultSaveEventData();
                         saveEventData.customerId = customer.id;
-                        saveEventData.status = `${fuType} new customer`;
-                        if (fuType === 'fu25') saveEventData.isCustomerActive = true;
-
+                        saveEventData.status = statusToSave;
+                        if (fuType === 'fu25' || fuType === 'fu25ac' || fuType === 'fu25ar') saveEventData.isCustomerActive = false;
+    
                         await createScheduleDone(saveEventData);
-
+    
                         break; 
                     }
                 }
             }
+        }
+
+        return;
+    }
+
+    if (session.id === schedule.chatbot_repeat && resultItrEvents.eventTemp.includes("awb release")) {
+        if (
+            resultItrEvents.lastEvent.last_awb_status === "delivering" && 
+            resultItrEvents.lastEvent.status === "awb release"
+        ) {
+            let message = schedule.message_delivering;
+            const documentType = 'delivering_doc';
+
+            if (resultItrEvents.lastEvent.estimate_days) {
+                message = message.replace("[estimate_day]", resultItrEvents.lastEvent.estimate_days);
+            } 
+
+            if (message) {
+                const document = documents.find(doc => doc.type === documentType);
+                const numberDetails = await client.getNumberId(customer.whatsapp_number);
+
+                if (numberDetails) {
+                    const media = document
+                        ? MessageMedia.fromFilePath(process.env.LARAVEL_STORAGE_PATH + document.filepath)
+                        : null;
+
+                    await client.sendMessage(
+                        numberDetails._serialized,
+                        message,
+                        media ? { media } : {}
+                    );
+                }
+            }
+
+            const saveEventData = createDefaultSaveEventData();
+            saveEventData.customerId = customer.id;
+            saveEventData.status = "delivering";
+            saveEventData.orderId = resultItrEvents.lastEvent.order_id;
+
+            await createScheduleDone(saveEventData);
+        } else if (
+            resultItrEvents.lastEvent.last_awb_status === "in kurir" &&
+            (
+                resultItrEvents.lastEvent.status === "awb release" ||
+                resultItrEvents.lastEvent.status === "delivering"
+            )
+        ) {
+            let message = schedule.message_in_kurir;
+            const documentType = 'in_kurir_doc';
+
+            if (resultItrEvents.lastEvent.estimate_days) {
+                message = message.replace("[estimate_day]", resultItrEvents.lastEvent.estimate_days);
+            } 
+
+            if (message) {
+                const document = documents.find(doc => doc.type === documentType);
+                const numberDetails = await client.getNumberId(customer.whatsapp_number);
+
+                if (numberDetails) {
+                    const media = document
+                        ? MessageMedia.fromFilePath(process.env.LARAVEL_STORAGE_PATH + document.filepath)
+                        : null;
+
+                    await client.sendMessage(
+                        numberDetails._serialized,
+                        message,
+                        media ? { media } : {}
+                    );
+                }
+            }
+
+            const saveEventData = createDefaultSaveEventData();
+            saveEventData.customerId = customer.id;
+            saveEventData.status = "in kurir";
+            saveEventData.orderId = resultItrEvents.lastEvent.order_id;
+
+            await createScheduleDone(saveEventData);
+        } else if (resultItrEvents.lastEvent.last_awb_status === "delivered" &&
+            (
+                resultItrEvents.lastEvent.status === "awb release" ||
+                resultItrEvents.lastEvent.status === "delivering" ||
+                resultItrEvents.lastEvent.status === "in kurir"
+            )
+        ) {
+            let message = schedule.message_delivered;
+            const documentType = 'delivered_doc';
+
+            if (resultItrEvents.lastEvent.estimate_days) {
+                message = message.replace("[estimate_day]", resultItrEvents.lastEvent.estimate_days);
+            } 
+
+            if (message) {
+                const document = documents.find(doc => doc.type === documentType);
+                const numberDetails = await client.getNumberId(customer.whatsapp_number);
+
+                if (numberDetails) {
+                    const media = document
+                        ? MessageMedia.fromFilePath(process.env.LARAVEL_STORAGE_PATH + document.filepath)
+                        : null;
+
+                    await client.sendMessage(
+                        numberDetails._serialized,
+                        message,
+                        media ? { media } : {}
+                    );
+                }
+            }
+
+            const saveEventData = createDefaultSaveEventData();
+            saveEventData.customerId = customer.id;
+
+            if (resultItrEvents.eventTemp.replace("awb release", "").includes("new customer")) {
+                saveEventData.status = "closing";
+            } else if (resultItrEvents.eventTemp.replace("awb release", "").includes("after closing")) {
+                saveEventData.status = "repeat";
+            } else {
+                saveEventData.status = "repeat";
+            }
+
+            saveEventData.orderId = resultItrEvents.lastEvent.order_id;
+            saveEventData.awbId = resultItrEvents.lastEvent.awb_id;
+
+            await createScheduleDone(saveEventData);
+        } else if (resultItrEvents.lastEvent.last_awb_status === "retur" &&
+            (
+                resultItrEvents.lastEvent.status === "awb release" ||
+                resultItrEvents.lastEvent.status === "delivering" ||
+                resultItrEvents.lastEvent.status === "in kurir"
+            )
+        ) {
+            const saveEventData = createDefaultSaveEventData();
+            saveEventData.customerId = customer.id;
+            saveEventData.status = "retur";
+            saveEventData.orderId = resultItrEvents.lastEvent.order_id;
+            saveEventData.awbId = resultItrEvents.lastEvent.awb_id;
+
+            await createScheduleDone(saveEventData);
         }
     }
 }

@@ -44,9 +44,12 @@ async function fetchEventsOrdersAwbsByCustomerIds(customerIds) {
             events.*, 
             orders.status AS order_status,
             orders.from AS order_from,
+            orders.awb_id,
             awbs.awb_number, 
             awbs.last_awb_status,
-            awbs.last_awb_status_date
+            awbs.last_awb_status_date,
+            awbs.estimate_days,
+            awbs.shipment_received_date
          FROM events
          LEFT JOIN orders ON events.order_id = orders.id AND orders.deleted_at IS NULL
          LEFT JOIN awbs ON awbs.id = orders.awb_id AND awbs.deleted_at IS NULL
@@ -209,11 +212,11 @@ async function updateCustomer(userId, phoneNumber, chatbotScheduleId, scheduleSe
     connection.end();
 }
 
-async function updateAwbStatus(noResi, status, date) {
+async function updateAwbStatus(noResi, lastValidStatus, lastValidStatusDate, shipmentReceivedDate, estimatedDays) {
     const connection = await initDB();
     await connection.execute(
-        'UPDATE awbs SET last_awb_status = ?, last_awb_status_date = ?, updated_at = NOW() WHERE awb_number = ? AND deleted_at IS NULL',
-        [status, date, noResi]
+        'UPDATE awbs SET last_awb_status = ?, last_awb_status_date = ?, shipment_received_date = ?, estimate_days = ?, updated_at = NOW() WHERE awb_number = ? AND deleted_at IS NULL',
+        [lastValidStatus, lastValidStatusDate, shipmentReceivedDate, estimatedDays, noResi]
     );
     connection.end();
 }
@@ -363,13 +366,56 @@ async function createScheduleDone(saveEventData) {
             'INSERT INTO events (order_id, customer_id, status, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
             [saveEventData.orderId, saveEventData.customerId, saveEventData.status]
         );
-        
-        if (saveEventData.orderStatus) {
-            //
-        }
 
         if (saveEventData.isCustomerActive !== null) {
-            //
+            await connection.execute(
+                `
+                UPDATE customers 
+                SET is_active = ?
+                WHERE id = ? AND deleted_at IS NULL
+                `,
+                [saveEventData.isCustomerActive, saveEventData.customerId]
+            );
+        }
+
+        if (saveEventData.status === "closing" ||
+            saveEventData.status === "repeat"
+        ) {
+            await connection.execute(
+                `
+                UPDATE orders 
+                SET status = ?
+                WHERE id = ? AND deleted_at IS NULL
+                `,
+                ["closed", saveEventData.orderId]
+            );
+
+            await connection.execute(
+                `
+                UPDATE awbs 
+                SET has_closed = 1
+                WHERE id = ? AND deleted_at IS NULL
+                `,
+                [saveEventData.awbId]
+            );
+        } else if (saveEventData.status === "retur") {
+            await connection.execute(
+                `
+                UPDATE orders 
+                SET status = ?
+                WHERE id = ? AND deleted_at IS NULL
+                `,
+                ["cancel", saveEventData.orderId]
+            );
+
+            await connection.execute(
+                `
+                UPDATE awbs 
+                SET has_closed = 1
+                WHERE id = ? AND deleted_at IS NULL
+                `,
+                [saveEventData.awbId]
+            );
         }
 
         await connection.commit();
