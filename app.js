@@ -22,7 +22,11 @@ let clients = {};
 
 function createClient(session) {
     const client = new Client({
-        authStrategy: new NoAuth()
+        authStrategy: new NoAuth(),
+	puppeteer: {
+        	args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        	headless: true
+   	},
     });
 
     client.on('qr', (qr) => {
