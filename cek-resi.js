@@ -116,7 +116,8 @@ const cekResiJne = async () => {
                                         lastValidStatusDate = `${year}-${month}-${day} ${dateSplit[1]}:00`;
                                     }
                                     break;
-                                } else if (validStatus.includes("WITH DELIVERY COURIER") && validStatus.includes(destinationValue)) {
+                                // } else if (validStatus.includes("WITH DELIVERY COURIER") && validStatus.includes(destinationValue)) {
+                                } else if (validStatus.includes("WITH DELIVERY COURIER")) {
                                     lastValidStatus = "in kurir";
                                     if (validDate) {
                                         const dateSplit = validDate.split(" ");
