@@ -83,6 +83,7 @@ const cekResiJne = async () => {
                         let lastValidStatus = null;
                         let lastValidStatusDate = null;
                         let shipmentReceivedDate = null;
+                        let consoleStatus = true;
 
                         for (let i = 0; i < timelineItemsElement.length; i++) {
                             const text = await timelineItemsElement[i].getText();
@@ -91,6 +92,11 @@ const cekResiJne = async () => {
                                 const validDate = text.split("\n")[1] ?? "";
                                 if (validDate) {
                                     lastValidStatus = "delivering";
+
+                                    if (consoleStatus) {
+                                        console.log("status resi", lastValidStatus);
+                                    }
+
                                     const dateSplit = validDate.split(" ");
                                     const [day, month, year] = dateSplit[0].split("-");
                                     shipmentReceivedDate = `${year}-${month}-${day} ${dateSplit[1]}:00`;
@@ -102,6 +108,11 @@ const cekResiJne = async () => {
 
                                 if (validStatus.includes("RETURN SHIPMENT")) {
                                     lastValidStatus = "retur";
+
+                                    if (consoleStatus) {
+                                        console.log("status resi", lastValidStatus);
+                                    }
+
                                     if (validDate) {
                                         const dateSplit = validDate.split(" ");
                                         const [day, month, year] = dateSplit[0].split("-");
@@ -110,6 +121,11 @@ const cekResiJne = async () => {
                                     break;
                                 } else if (validStatus.includes("DELIVERED")) {
                                     lastValidStatus = "delivered";
+
+                                    if (consoleStatus) {
+                                        console.log("status resi", lastValidStatus);
+                                    }
+                                    
                                     if (validDate) {
                                         const dateSplit = validDate.split(" ");
                                         const [day, month, year] = dateSplit[0].split("-");
@@ -119,6 +135,11 @@ const cekResiJne = async () => {
                                 // } else if (validStatus.includes("WITH DELIVERY COURIER") && validStatus.includes(destinationValue)) {
                                 } else if (validStatus.includes("WITH DELIVERY COURIER")) {
                                     lastValidStatus = "in kurir";
+
+                                    if (consoleStatus) {
+                                        console.log("status resi", lastValidStatus);
+                                    }
+                                    
                                     if (validDate) {
                                         const dateSplit = validDate.split(" ");
                                         const [day, month, year] = dateSplit[0].split("-");
