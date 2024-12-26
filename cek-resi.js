@@ -83,7 +83,7 @@ const cekResiJne = async () => {
                         let lastValidStatus = null;
                         let lastValidStatusDate = null;
                         let shipmentReceivedDate = null;
-                        let consoleStatus = true;
+                        let consoleStatus = false;
 
                         for (let i = 0; i < timelineItemsElement.length; i++) {
                             const text = await timelineItemsElement[i].getText();
@@ -139,7 +139,7 @@ const cekResiJne = async () => {
                                     if (consoleStatus) {
                                         console.log("status resi", lastValidStatus);
                                     }
-                                    
+
                                     if (validDate) {
                                         const dateSplit = validDate.split(" ");
                                         const [day, month, year] = dateSplit[0].split("-");
