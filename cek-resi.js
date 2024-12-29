@@ -13,15 +13,19 @@ const chunkArray = (array, chunkSize) => {
 };
 
 const cekResiJne = async () => {
-    const TIMEOUT_DURATION = process.env.CEK_RESI_INTERVAL || 1800000; 
+    const cekResiInterval = parseInt(process.env.CEK_RESI_INTERVAL, 10);
+    const TIMEOUT_DURATION = !isNaN(cekResiInterval) && cekResiInterval > 0 
+        ? cekResiInterval * 0.75 
+        : 1800000; 
+
     let options = new chrome.Options();
     options.addArguments('--headless', '--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--disable-software-rasterizer');
 
-    let driver = await new Builder().forBrowser(Browser.CHROME).setChromeOptions(options).build();
-
+    let driver;
     try {
-        const awbs = await fetchAwbsByLogistic('JNE');
+        driver = await new Builder().forBrowser(Browser.CHROME).setChromeOptions(options).build();
 
+        const awbs = await fetchAwbsByLogistic('JNE');
         if (awbs.length === 0) {
             return { status: 'success', message: 'Tidak ada data AWB untuk JNE.' };
         }
@@ -88,7 +92,6 @@ const cekResiJne = async () => {
                                 let lastValidStatus = null;
                                 let lastValidStatusDate = null;
                                 let shipmentReceivedDate = null;
-                                let consoleStatus = false;
 
                                 for (let i = 0; i < timelineItemsElement.length; i++) {
                                     const text = await timelineItemsElement[i].getText();
@@ -97,10 +100,6 @@ const cekResiJne = async () => {
                                         const validDate = text.split("\n")[1] ?? "";
                                         if (validDate) {
                                             lastValidStatus = "delivering";
-
-                                            if (consoleStatus) {
-                                                console.log("status resi", lastValidStatus);
-                                            }
 
                                             const dateSplit = validDate.split(" ");
                                             const [day, month, year] = dateSplit[0].split("-");
@@ -114,10 +113,6 @@ const cekResiJne = async () => {
                                         if (validStatus.includes("RETURN SHIPMENT")) {
                                             lastValidStatus = "retur";
 
-                                            if (consoleStatus) {
-                                                console.log("status resi", lastValidStatus);
-                                            }
-
                                             if (validDate) {
                                                 const dateSplit = validDate.split(" ");
                                                 const [day, month, year] = dateSplit[0].split("-");
@@ -127,23 +122,14 @@ const cekResiJne = async () => {
                                         } else if (validStatus.includes("DELIVERED")) {
                                             lastValidStatus = "delivered";
 
-                                            if (consoleStatus) {
-                                                console.log("status resi", lastValidStatus);
-                                            }
-                                            
                                             if (validDate) {
                                                 const dateSplit = validDate.split(" ");
                                                 const [day, month, year] = dateSplit[0].split("-");
                                                 lastValidStatusDate = `${year}-${month}-${day} ${dateSplit[1]}:00`;
                                             }
                                             break;
-                                        // } else if (validStatus.includes("WITH DELIVERY COURIER") && validStatus.includes(destinationValue)) {
                                         } else if (validStatus.includes("WITH DELIVERY COURIER")) {
                                             lastValidStatus = "in kurir";
-
-                                            if (consoleStatus) {
-                                                console.log("status resi", lastValidStatus);
-                                            }
 
                                             if (validDate) {
                                                 const dateSplit = validDate.split(" ");
@@ -168,13 +154,21 @@ const cekResiJne = async () => {
                 }
             })(),
             new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Proses melebihi batas waktu')), TIMEOUT_DURATION)
+                setTimeout(async () => {
+                    console.error("Timeout terjadi, menghentikan proses driver.");
+                    if (driver) {
+                        await driver.quit(); 
+                    }
+                    reject(new Error('Proses melebihi batas waktu'));
+                }, TIMEOUT_DURATION)
             )
         ]);
     } catch (error) {
-        console.log("cek resi gagal ", error.message);
+        console.error("Proses pengecekan resi gagal:", error);
     } finally {
-        await driver.quit();
+        if (driver) {
+            await driver.quit();
+        }
     }
 };
 
