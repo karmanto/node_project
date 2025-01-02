@@ -1,3 +1,4 @@
+require('dotenv').config();
 const { Builder, Browser, By, Key } = require('selenium-webdriver');
 const chrome = require('selenium-webdriver/chrome');
 const { fetchAwbsByLogistic, updateAwbStatus } = require('./dbService');
@@ -168,4 +169,5 @@ const cekResiJne = async () => {
     }
 };
 
-module.exports = { cekResiJne };
+setInterval(cekResiJne, process.env.CEK_RESI_INTERVAL);
+cekResiJne();

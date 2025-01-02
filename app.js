@@ -15,7 +15,6 @@ const {
     checkTriggerOrder,
     checkTriggerResi,
 } = require('./cek-trigger');
-const { cekResiJne } = require('./cek-resi');
 const { sendScheduledMessages } = require('./send-schedule-messages');
 
 let clients = {};
@@ -170,8 +169,6 @@ async function initializeUnconnectedClients() {
 
 resetClientData().then(() => {
     setInterval(initializeUnconnectedClients, process.env.CEK_CLIENT_INTERAVAL);
-    setInterval(cekResiJne, process.env.CEK_RESI_INTERVAL);
-    cekResiJne();
 }).catch(err => {
     console.error('Failed to reset client data:', err);
 });

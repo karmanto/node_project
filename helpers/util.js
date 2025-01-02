@@ -160,7 +160,9 @@ async function handleCustomerFollowUps(client, customer, schedule, documents, se
 
     const followUpTypes = {
         chatbot_new_customer: [
-            { fuType: 'fu3', delayDays: 3, lastEventCondition: 'new customer', statusToSave: "fu3 new customer" },
+            { fuType: 'fu1', delayDays: 1, lastEventCondition: 'new customer', statusToSave: "fu1 new customer" },
+            { fuType: 'fu2', delayDays: 2, lastEventCondition: 'fu1 new customer', statusToSave: "fu2 new customer" },
+            { fuType: 'fu3', delayDays: 3, lastEventCondition: 'fu2 new customer', statusToSave: "fu3 new customer" },
             { fuType: 'fu7', delayDays: 7, lastEventCondition: 'fu3 new customer', statusToSave: "fu7 new customer" },
             { fuType: 'fu14', delayDays: 14, lastEventCondition: 'fu7 new customer', statusToSave: "fu14 new customer" },
             { fuType: 'fu21', delayDays: 21, lastEventCondition: 'fu14 new customer', statusToSave: "fu21 new customer" },
