@@ -16,7 +16,7 @@ const cekResiJne = async () => {
     const cekResiInterval = parseInt(process.env.CEK_RESI_INTERVAL, 10);
     const TIMEOUT_DURATION = !isNaN(cekResiInterval) && cekResiInterval > 0 
         ? cekResiInterval * 0.75 
-        : 1800000; 
+        : 1800000;
 
     let options = new chrome.Options();
     options.addArguments('--headless', '--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--disable-software-rasterizer');
@@ -158,6 +158,7 @@ const cekResiJne = async () => {
                     console.error("Timeout terjadi, menghentikan proses driver.");
                     if (driver) {
                         await driver.quit(); 
+                        driver = null;
                     }
                     reject(new Error('Proses melebihi batas waktu'));
                 }, TIMEOUT_DURATION)
@@ -167,7 +168,10 @@ const cekResiJne = async () => {
         console.error("Proses pengecekan resi gagal:", error);
     } finally {
         if (driver) {
-            await driver.quit();
+            try {
+                await driver.quit();
+            } catch {}
+            driver = null;
         }
     }
 };
