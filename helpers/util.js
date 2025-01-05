@@ -134,7 +134,7 @@ function sendingDate(gmtTime, sendingTime, dateTime, addDate) {
     date.setDate(date.getDate() + addDate);
 
     if (sendingTime) {
-        date.setHours(sendingTime);
+        date.setHours(sendingTime + 1);
         date.setMinutes(0);
         date.setSeconds(0);
     }
