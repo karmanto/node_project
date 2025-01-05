@@ -22,10 +22,19 @@ let clients = {};
 function createClient(session) {
     const client = new Client({
         authStrategy: new NoAuth(),
-	puppeteer: {
-        	args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        	headless: true
-   	},
+        puppeteer: {
+                args: [
+                        '--no-sandbox', 
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-accelerated-2d-canvas',
+                        '--disable-gpu',
+                        '--renderer-process-limit=1',
+                        '--mute-audio',
+                        '--disable-software-rasterizer',
+                        '--disable-sync'],
+                headless: true
+        },
     });
 
     client.on('qr', (qr) => {
