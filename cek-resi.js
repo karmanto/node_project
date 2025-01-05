@@ -14,6 +14,7 @@ const chunkArray = (array, chunkSize) => {
 const cekResiJne = async () => {
     let options = new chrome.Options();
     options.addArguments(
+        '--headless',
         '--no-sandbox', 
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
