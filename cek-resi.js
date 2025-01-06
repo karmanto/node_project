@@ -23,7 +23,14 @@ const cekResiJne = async () => {
         '--renderer-process-limit=1',
         '--mute-audio',
         '--disable-software-rasterizer',
-        '--disable-sync');
+        '--disable-sync',
+        '--disable-cache',
+        '--disable-application-cache',
+        '--disable-offline-load-stale-cache',
+        '--disable-gpu-shader-disk-cache',
+        '--media-cache-size=0',
+        '--disk-cache-size=0',
+    );
 
     let driver = await new Builder().forBrowser(Browser.CHROME).setChromeOptions(options).build();
 

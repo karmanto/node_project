@@ -32,7 +32,16 @@ function createClient(session) {
                         '--renderer-process-limit=1',
                         '--mute-audio',
                         '--disable-software-rasterizer',
-                        '--disable-sync'],
+                        '--disable-sync',
+                        '--aggressive-cache-discard',
+                        '--disable-cache',
+                        '--disable-application-cache',
+                        '--disable-offline-load-stale-cache',
+                        '--disable-gpu-shader-disk-cache',
+                        '--media-cache-size=0',
+                        '--disk-cache-size=0',
+
+                    ],
                 headless: true
         },
     });
