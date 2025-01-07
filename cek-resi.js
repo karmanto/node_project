@@ -14,16 +14,7 @@ const chunkArray = (array, chunkSize) => {
 const cekResiJne = async () => {
     let options = new chrome.Options();
     options.addArguments(
-        '--headless',
-        '--no-sandbox', 
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu',
-        '--renderer-process-limit=1',
-        '--mute-audio',
-        '--disable-software-rasterizer',
-        '--disable-sync');
+        '--headless');
 
     let driver = await new Builder().forBrowser(Browser.CHROME).setChromeOptions(options).build();
 
@@ -180,4 +171,3 @@ const cekResiJne = async () => {
 };
 
 setInterval(cekResiJne, process.env.CEK_RESI_INTERVAL);
-cekResiJne();

@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, NoAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth } = require('whatsapp-web.js');
 const {
     fetchUnconnectedClients,
     resetClientData,
@@ -21,18 +21,11 @@ let clients = {};
 
 function createClient(session) {
     const client = new Client({
-        authStrategy: new NoAuth(),
+        authStrategy: new LocalAuth(),
         puppeteer: {
                 args: [
                         '--no-sandbox', 
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-accelerated-2d-canvas',
-                        '--disable-gpu',
-                        '--renderer-process-limit=1',
-                        '--mute-audio',
-                        '--disable-software-rasterizer',
-                        '--disable-sync'],
+                        '--disable-setuid-sandbox'],
                 headless: true
         },
     });
