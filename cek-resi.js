@@ -14,7 +14,23 @@ const chunkArray = (array, chunkSize) => {
 const cekResiJne = async () => {
     let options = new chrome.Options();
     options.addArguments(
-        '--headless');
+        '--headless',
+        '--no-sandbox', 
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--disable-gpu',
+        '--renderer-process-limit=1',
+        '--mute-audio',
+        '--disable-software-rasterizer',
+        '--disable-sync',
+        '--disable-cache',
+        '--disable-application-cache',
+        '--disable-offline-load-stale-cache',
+        '--disable-gpu-shader-disk-cache',
+        '--media-cache-size=0',
+        '--disk-cache-size=0',
+    );
 
     let driver = await new Builder().forBrowser(Browser.CHROME).setChromeOptions(options).build();
 
