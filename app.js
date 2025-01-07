@@ -16,8 +16,20 @@ const {
     checkTriggerResi,
 } = require('./cek-trigger');
 const { sendScheduledMessages } = require('./send-schedule-messages');
+const fs = require('fs');
+const path = './.wwebjs_auth/session-'; 
 
 let clients = {};
+
+const logoutSession = (id) => {
+    fs.rm((path + id), { recursive: true, force: true }, (err) => {
+        if (err) {
+            console.error('Error deleting session ' + id, err);
+        } else {
+            console.log('Session ' + id + ' deleted successfully!');
+        }
+    });
+};
 
 function createClient(session) {
     const client = new Client({
@@ -82,6 +94,7 @@ function createClient(session) {
             console.log(`Interval for Client ID ${session.id} cleared.`);
         }
 
+        logoutSession(session.id);
         clients[session.id].destroy(); 
         delete clients[session.id];
     });
@@ -138,6 +151,7 @@ async function initializeUnconnectedClients() {
                     console.log(`Interval for Client ID ${session.id} cleared.`);
                 }
 
+                logoutSession(session);
                 clients[session.id].destroy(); 
                 delete clients[session.id];
             } else if (!session.is_active) {
@@ -153,6 +167,7 @@ async function initializeUnconnectedClients() {
                     console.log(`Interval for Client ID ${session.id} cleared.`);
                 }
 
+                logoutSession(session);
                 clients[session.id].destroy(); 
                 delete clients[session.id];
             }
