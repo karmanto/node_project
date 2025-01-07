@@ -21,7 +21,8 @@ let clients = {};
 
 function createClient(session) {
     const client = new Client({
-        authStrategy: new LocalAuth(),
+        authStrategy: new LocalAuth({
+            clientId: session.id }),
         puppeteer: {
                 args: [
                         '--no-sandbox', 
