@@ -12,7 +12,6 @@ async function initDB() {
                 database: process.env.DB_DATABASE,
                 port: process.env.DB_PORT,
             });
-            console.log('Database connection established successfully.');
             return connection; 
         } catch (error) {
             console.error('Database connection failed. Retrying...', error.message);
