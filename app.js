@@ -151,7 +151,7 @@ async function initializeUnconnectedClients() {
                     console.log(`Interval for Client ID ${session.id} cleared.`);
                 }
 
-                logoutSession(session);
+                logoutSession(session.id);
                 clients[session.id].destroy(); 
                 delete clients[session.id];
             } else if (!session.is_active) {
@@ -167,7 +167,7 @@ async function initializeUnconnectedClients() {
                     console.log(`Interval for Client ID ${session.id} cleared.`);
                 }
 
-                logoutSession(session);
+                logoutSession(session.id);
                 clients[session.id].destroy(); 
                 delete clients[session.id];
             }
@@ -183,6 +183,7 @@ async function initializeUnconnectedClients() {
                 console.log(`Interval for Client ID ${clientId} cleared.`);
             }
             
+            logoutSession(clientId);
             clients[clientId].destroy(); 
             delete clients[clientId];
         }
