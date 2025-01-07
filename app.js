@@ -17,7 +17,7 @@ const {
 } = require('./cek-trigger');
 const { sendScheduledMessages } = require('./send-schedule-messages');
 const fs = require('fs');
-const path = './.wwebjs_auth/session-'; 
+const path = '.wwebjs_auth/session-'; 
 
 let clients = {};
 
