@@ -88,6 +88,10 @@ function createClient(session) {
 
     client.on('message_create', async message => {
         const isFromMe = message.fromMe;
+
+        if (message.body === process.env.MESSAGE_CHECK) {
+            client.sendMessage(message.from, process.env.MESSAGE_CHECK_ACK);
+        }
     
         if (isFromMe) {
             if (await isUserActive(session.user_id)) {

@@ -24,7 +24,7 @@ async function addCustomerIfNotExists(session, message, chatbotSchedule) {
 async function checkTriggerOrder(message, customer, chatbotSchedule) {
     const lastEvent = await fetchLastEventByCustomerId(customer.id);
 
-    if (lastEvent.status !== "order" && lastEvent.status !== "awb release" && lastEvent.status !== "delivering" && lastEvent.status !== "in kurir") {
+    if (lastEvent && lastEvent.status !== "order" && lastEvent.status !== "awb release" && lastEvent.status !== "delivering" && lastEvent.status !== "in kurir") {
         if (chatbotSchedule.trigger_order) {
             const triggerOrder = chatbotSchedule.trigger_order.replace(/\r/g, "");
     
@@ -68,7 +68,7 @@ async function checkTriggerOrder(message, customer, chatbotSchedule) {
 async function checkTriggerResi(message, customer, chatbotSchedule) {
     const lastEvent = await fetchLastEventByCustomerId(customer.id);
 
-    if (lastEvent.status === "order" && lastEvent.order_id && lastEvent.order_from === "whatsapp") {
+    if (lastEvent && lastEvent.status === "order" && lastEvent.order_id && lastEvent.order_from === "whatsapp") {
         if (chatbotSchedule.trigger_update_awb) {
             const triggerUpdateAWB = chatbotSchedule.trigger_update_awb.replace(/\r/g, "");
 
